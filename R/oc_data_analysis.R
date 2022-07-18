@@ -1,4 +1,4 @@
-####################################################################################################
+# Libs #############################################################################################
 
 library(tidyverse)
 library(prospectr)
@@ -27,7 +27,6 @@ write_csv(binned_oc_spectra, "../data/_binned_oc_data.csv")
 # Plot layouts #####################################################################################
 
 ## Lengthy and repetitive plot formatting and functions are defined here
-
 ## histograms
 hist_layout <- list(theme_bw(), ylab("Count"),
                     theme(text = element_text(family = "Times New Roman"),
@@ -48,18 +47,53 @@ create_histograms <- function(data = NULL, variables = NULL, group_by = NULL) {
   return(plots)
 }
 
+## Vis-NIR
+visnir_layout <- list(theme_bw(), ylab("Reflectance factor"), xlab("Wavelength (nm)"),
+                      scale_x_continuous(breaks = seq(0, 2500, 250)),
+                      theme(text = element_text(family = "Times New Roman"),
+                            legend.title = element_blank()))
+
 # Descriptive stats　###############################################################################
 
 raw_oc_data <- read_excel("../data/oc_data.xlsx", na = "NA")
 
 ## All countries ###################################################################################
-##OC plots
+## OC plots
 ggplot(raw_oc_data, aes(x = OC, fill = country)) +
   geom_histogram() + hist_layout
 
 ## PXRF plots
 pxrf_data <- raw_oc_data %>%
              select(country, c(K:Pb))
-
 pxrf_hists <- pxrf_histograms(pxrf_data, c(2:17), "country")
 ggarrange(plotlist = pxrf_hists, ncol = 4, nrow = 4, common.legend = T, legend = "bottom")
+
+## Vis-NIR plots
+## No continuum removal
+visnir_data <- raw_oc_data %>%
+               select(country, c("350":"2500")) %>%
+               filter(country != "Africa") %>% # Africa has no Vis-NIR data
+               group_by(country) %>%
+               summarise(across(c("350":"2500"), mean, na.rm = T)) %>%
+               pivot_longer(c("350":"2500"), names_to = "wavelength", values_to = "reflectance") %>%
+               mutate(wavelength = as.numeric(wavelength))
+ggplot(visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
+       geom_line() + visnir_layout
+
+## With continuum removal
+cr_visnir_data <- raw_oc_data %>%
+                  select(country, c("350":"2500")) %>%
+                  filter(country != "Africa") %>% # Africa has no Vis-NIR data
+                  group_by(country) %>%
+                  summarise(across(c("350":"2500"), mean, na.rm = T)) %>%
+                  select(c("350":"2500")) %>%
+                  continuumRemoval() %>%
+                  as.tibble()
+colnames(cr_visnir_data) <- seq(350, 2500, 10)
+cr_visnir_data <- add_column(cr_visnir_data, country = c("Brazil", "France", "India", "US"),
+                             .before = "350") %>%
+                             pivot_longer(c("350":"2500"), names_to = "wavelength",
+                                          values_to = "reflectance") %>%
+                             mutate(wavelength = as.numeric(wavelength))
+ggplot(cr_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
+       geom_line() + visnir_layout
