@@ -26,8 +26,35 @@ binned_oc_spectra <- binned_oc_spectra[-215] %>% # removing band 2498 and replac
 
 write_csv(binned_oc_spectra, "../data/_binned_oc_data.csv")
 
-# Plot layouts #####################################################################################
+# Functions ########################################################################################
 
+## Functions not related to plots
+## Calculates CV
+cv <- function(x, na.rm) {
+  return(sd(x, na.rm = na.rm) / mean(x, na.rm = na.rm))
+}
+## Automatic descriptive stats
+descriptive_stats <- function(data, group_by = NULL) {
+functions <- c(max, min, mean, median, sd, cv, IQR)
+names <- c("variables", "max", "min", "mean", "median", "sd", "cv", "IQR")
+  if (!is.null(group_by)) {
+    names <- c(group_by, names)
+    stats <- data %>%
+             pivot_longer(-c(group_by), names_to = "variables", values_to = "values") %>%
+             group_by_at(c(group_by, "variables")) %>%
+             summarize(across(everything(), functions, na.rm = T)) %>%
+             rename_with(~ names)
+  } else {
+    stats <- data %>%
+             pivot_longer(everything(), names_to = "variables", values_to = "values") %>%
+             group_by(variables) %>%
+             summarize(across(everything(), functions, na.rm = T)) %>%
+             rename_with(~ names)
+  }
+return(stats)
+}
+
+# Plot layouts #####################################################################################
 ## Lengthy and repetitive plot formatting and functions are defined here
 ## histograms
 hist_layout <- list(theme_bw(), ylab("Count"),
@@ -48,7 +75,29 @@ create_histograms <- function(data = NULL, variables = NULL, group_by = NULL) {
   }
   return(plots)
 }
-
+## Boxplots
+boxplot_layout <- list(theme_bw(),theme(text = element_text(family = "Times New Roman")),
+                       xlab(""), ylab(""))
+create_boxplots <- function(data, variables, by_country = T) {
+  if (by_country) {
+    boxplot_data <- data %>%
+                    select(all_of(variables)) %>%
+                    pivot_longer(-c(country), names_to = "variables", values_to = "values")
+    plot <- ggplot(boxplot_data, aes(y = variables, x = values)) +
+            geom_boxplot() +
+            facet_grid(country ~ variables, scales = "free") +
+            boxplot_layout
+  } else {
+    boxplot_data <- data %>%
+                    select(all_of(variables)) %>%
+                    pivot_longer(everything(), names_to = "variables", values_to = "values")
+    plot <- ggplot(boxplot_data, aes(y = variables, x = values)) +
+            geom_boxplot() +
+            facet_grid( ~ variables, scales = "free") +
+            boxplot_layout
+  }
+  return(plot)
+}
 ## Vis-NIR
 visnir_layout <- list(theme_bw(), ylab("Reflectance factor"), xlab("Wavelength (nm)"),
                       scale_x_continuous(breaks = seq(0, 2500, 250)),
@@ -117,10 +166,24 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
 
 raw_oc_data <- read_excel("../data/oc_data.xlsx", na = "NA")
 
-## All countries ###################################################################################
+## All countries
+desc_stats_allcountries <- raw_oc_data %>%
+                           select("OC", "K":"Pb") %>%
+                           descriptive_stats()
+
+## By country
+desc_stats_bycountries <- raw_oc_data %>%
+                          select("country", "OC", "K":"Pb") %>%
+                          descriptive_stats(group_by = "country")
+
 ## OC plots
 ggplot(raw_oc_data, aes(x = OC, fill = country)) +
   geom_histogram() + hist_layout
+
+## Boxplots
+create_boxplots(raw_oc_data, c("Fe", "Ca", "K"), by_country = F)
+create_boxplots(raw_oc_data, c("country","Ti"), by_country = T)
+create_boxplots(raw_oc_data, c("country","OC"), by_country = T)
 
 ## PXRF plots
 pxrf_data <- raw_oc_data %>%
@@ -194,12 +257,12 @@ corrplot(cor_pxrf, method = "color", order = "hclust", p.mat = cor_pxrf_pvalue$p
 
 ## Vis-NIR correlations
 ## All countries
-cor_visnir_plot_allcountries <- create_cor_visnir(cor_visnir_bycountry,
+cor_visnir_plot_allcountries <- create_cor_visnir(raw_oc_data,
                                                   bands = c(27:242), property = "OC")
 
 ## By country
 cor_visnir_bycountry <- raw_oc_data %>%
-                        filter(country != "Africa")
+                        filter(country != "Africa") # Africa has no Vis-NIR data
 cor_visnir_plot_bycountry <- create_cor_visnir(cor_visnir_bycountry, bands = c(27:242),
                                                 property = "OC", group_by = "country")
 
