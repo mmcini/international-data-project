@@ -5,8 +5,10 @@ library(tidyverse)
 library(prospectr)
 library(extrafont)
 library(corrplot)
+library(stringr)
 library(ggpubr)
 library(readxl)
+library(caret)
 
 # Merging Vis-NIR data/fixing format　##############################################################
 
@@ -161,6 +163,19 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
   }
   return(plots)
 }
+prediction_plot_layout <- list(xlab("Observed OC (%)"), ylab("Predicted OC (%)"),
+                               geom_point(), geom_abline(slope = 1), theme_bw(),
+                               theme(text = element_text(family = "Times New Roman"),
+                                     legend.title = element_blank()))
+annotate_valid_scores <- function(data, r2, rmse) {
+  ## data must have pred and obs columns for relative positioning
+  annotate("text", label = c(r2, rmse), x = min(data$obs),
+           y = c(max(data$pred), max(data$pred) - 0.3),
+           vjust = 0, hjust = 0, family = "Times New Roman")
+}
+importance_plot_layout <- list(geom_bar(stat = "identity", width = 0.2),coord_flip(),
+                               xlab("Variables"), ylab("Importance (%)"),
+                               theme_bw(), theme(text = element_text("Times New Roman")))
 
 # Descriptive stats　###############################################################################
 
@@ -269,3 +284,105 @@ cor_visnir_plot_bycountry <- create_cor_visnir(cor_visnir_bycountry, bands = c(2
 ## All Vis-NIR correlation plots
 cor_visnir_plot_list <- append(cor_visnir_plot_allcountries, cor_visnir_plot_bycountry)
 ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T, legend = "bottom")
+
+# Modeling　########################################################################################
+
+## All countries ###################################################################################
+
+## Vis-NIR models ##################################################################################
+visnir_data_allcountries <- raw_oc_data %>%
+                            select(OC, "350":"2500") %>%
+                            drop_na()
+countries <- raw_oc_data %>% # keeping countries to plot later
+            select(country, OC, "350":"2500") %>%
+            drop_na() %>%
+            select(country)
+
+## PLS
+control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess_pls <- c("zv", "center", "scale")
+set.seed(100)
+visnir_pls_model <- train(OC ~ ., data = visnir_data_allcountries, method = "pls",
+                          preProcess = preprocess_pls,trControl = control_pls)
+
+## PLS results
+visnir_pls_model # best model with comps = 3
+visnir_pls_pred <- visnir_pls_model$pred %>%
+                   filter(ncomp == 3) %>%
+                   arrange(rowIndex) %>%
+                   add_column(country = countries$country)
+rmse_pls <- paste("RMSE: ", round(min(visnir_pls_model$results$RMSE), 2))
+r2_pls <- paste("R2: ", round(max(visnir_pls_model$results$Rsquared), 2))
+ggplot(visnir_pls_pred, aes(x = obs, y = pred, color = country)) +
+       prediction_plot_layout +
+       annotate_valid_scores(visnir_pls_pred, r2_pls, rmse_pls)
+
+## PLS coefficients
+pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
+             as_tibble() %>%
+             rename("Component 1" = contains("1"),
+                    "Component 2" = contains("2"),
+                    "Component 3" = contains("3")) %>%
+             add_column(bands = seq(350, 2500, 10)) %>%
+             pivot_longer(-c("bands"), names_to = "comps", values_to = "values")
+ggplot(pls_coefs, aes(x = bands, y = values, color = comps, linetype = comps)) +
+       geom_line() + visnir_layout + ylab("Coefficients")
+
+## PLS importance
+visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
+                         rownames_to_column("variables") %>%
+                         slice_max(n = 20, order_by = Overall) %>% # 10 biggest values
+                         arrange(Overall) %>%
+                         mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                         mutate(variables = factor(variables,levels = variables))
+ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout
+
+## RF with PCA preprocessing
+control_rf <- trainControl(method = "cv", number = 10, savePredictions = T,
+                           preProcOptions = list(pcaComp = 10)) # use 10 first PCs
+preprocess_rf <- c("zv", "center", "scale", "pca")
+set.seed(100)
+visnir_rf_model <- train(OC ~ ., data = visnir_data_allcountries, method = "rf",
+                          preProcess = preprocess_rf,trControl = control_rf)
+visnir_rf_model
+## RF with PCA preprocessing results
+visnir_rf_pred <- visnir_rf_model$pred %>%
+                  filter(mtry == 2) %>%
+                  add_column(country = countries$country)
+rmse_rf <- paste("RMSE: ", round(min(visnir_rf_model$results$RMSE), 2))
+r2_rf <- paste("R2: ", round(max(visnir_rf_model$results$Rsquared), 2))
+ggplot(visnir_rf_pred, aes(x = obs, y = pred, color = country)) +
+      prediction_plot_layout +
+      annotate_valid_scores(visnir_rf_pred, r2_rf, rmse_rf)
+
+visnir_rf_importance <- varImp(visnir_rf_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        arrange(Overall) %>%
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout
+
+## Cubist
+control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess_cubist <- c("zv", "center", "scale")
+set.seed(100)
+visnir_cubist_model <- train(OC ~ ., data = visnir_data_allcountries, method = "cubist",
+                          preProcess = preprocess_cubist,trControl = control_cubist)
+
+## Cubist results
+visnir_cubist_pred <- visnir_cubist_model$pred %>%
+                  filter(committees == 20, neighbors == 0) %>% # best scores
+                  add_column(country = countries$country)
+rmse_cubist <- paste("RMSE: ", round(min(visnir_cubist_model$results$RMSE), 2))
+r2_cubist <- paste("R2: ", round(max(visnir_cubist_model$results$Rsquared), 2))
+ggplot(visnir_cubist_pred, aes(x = obs, y = pred, color = country)) +
+      prediction_plot_layout +
+      annotate_valid_scores(visnir_cubist_pred, r2_cubist, rmse_cubist)
+
+## Cubist importance
+visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 10, order_by = Overall) %>% # 10 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout
