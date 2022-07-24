@@ -163,6 +163,7 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
   }
   return(plots)
 }
+## Prediction plots
 prediction_plot_layout <- list(xlab("Observed OC (%)"), ylab("Predicted OC (%)"),
                                geom_point(), geom_abline(slope = 1), theme_bw(),
                                theme(text = element_text(family = "Times New Roman"),
@@ -321,7 +322,7 @@ control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_pls <- c("zv", "center", "scale")
 set.seed(100)
 visnir_pls_model <- train(OC ~ ., data = visnir_data_allcountries, method = "pls",
-                          preProcess = preprocess_pls,trControl = control_pls)
+                          preProcess = preprocess_pls, trControl = control_pls)
 
 ## PLS results
 visnir_pls_pred <- visnir_pls_model$pred %>%
@@ -335,7 +336,7 @@ r2_pls_text <- paste("R2: ", round(r2_pls, 2))
 ggplot(visnir_pls_pred, aes(x = obs, y = pred, color = country)) +
        prediction_plot_layout +
        annotate_valid_scores(visnir_pls_pred, r2_pls_text, rmse_pls_text) +
-       ggtitle("PLS")
+       ggtitle("Vis-NIR - PLS")
 ggsave("figures/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -348,7 +349,8 @@ pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
              add_column(bands = seq(350, 2500, 10)) %>%
              pivot_longer(-c("bands"), names_to = "comps", values_to = "values")
 ggplot(pls_coefs, aes(x = bands, y = values, color = comps, linetype = comps)) +
-       geom_line() + visnir_layout + ylab("Coefficients") + ggtitle("PLS Coefficients")
+       geom_line() + visnir_layout + ylab("Coefficients") +
+       ggtitle("Vis-NIR - PLS Coefficients")
 ggsave("figures/visnir_pls_coefs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -360,7 +362,7 @@ visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
                          mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
                          mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
-       ggtitle("PLS Variable Importance")
+       ggtitle("Vis-NIR - PLS Variable Importance")
 ggsave("figures/visnir_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -370,7 +372,7 @@ control_rf <- trainControl(method = "cv", number = 10, savePredictions = T,
 preprocess_rf <- c("zv", "center", "scale", "pca")
 set.seed(100)
 visnir_rf_model <- train(OC ~ ., data = visnir_data_allcountries, method = "rf",
-                          preProcess = preprocess_rf,trControl = control_rf)
+                          preProcess = preprocess_rf, trControl = control_rf)
 
 ## RF with PCA preprocessing results
 visnir_rf_pred <- visnir_rf_model$pred %>%
@@ -383,7 +385,7 @@ r2_rf_text <- paste("R2: ", round(r2_rf, 2))
 ggplot(visnir_rf_pred, aes(x = obs, y = pred, color = country)) +
       prediction_plot_layout +
       annotate_valid_scores(visnir_rf_pred, r2_rf_text, rmse_rf_text) +
-      ggtitle("RF")
+      ggtitle("Vis-NIR - RF")
 ggsave("figures/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -393,7 +395,7 @@ visnir_rf_importance <- varImp(visnir_rf_model)$importance %>%
                         arrange(Overall) %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
-      ggtitle("RF Variable Importance")
+      ggtitle("Vis-NIR - RF Variable Importance")
 ggsave("figures/visnir_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -402,7 +404,7 @@ control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_cubist <- c("zv", "center", "scale")
 set.seed(100)
 visnir_cubist_model <- train(OC ~ ., data = visnir_data_allcountries, method = "cubist",
-                          preProcess = preprocess_cubist,trControl = control_cubist)
+                          preProcess = preprocess_cubist, trControl = control_cubist)
 
 ## Cubist results
 visnir_cubist_pred <- visnir_cubist_model$pred %>%
@@ -415,7 +417,7 @@ r2_cubist_text <- paste("R2: ", round(r2_cubist, 2))
 ggplot(visnir_cubist_pred, aes(x = obs, y = pred, color = country)) +
       prediction_plot_layout +
       annotate_valid_scores(visnir_cubist_pred, r2_cubist_text, rmse_cubist_text) +
-      ggtitle("Cubist")
+      ggtitle("Vis-NIR - Cubist")
 ggsave("figures/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
@@ -427,14 +429,137 @@ visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
                         mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
-      ggtitle("Cubist")
+       ggtitle("Vis-NIR - Cubist Variable Importance")
 ggsave("figures/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
-model_scores <- tibble(Dataset = character(), Model = character(),
+model_scores <- tibble(Dataset = character(), n = numeric(), Model = character(),
                        RMSE = numeric(), R2 = numeric()) %>%
-                add_row(Dataset = "Vis-NIR", Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
-                add_row(Dataset = "Vis-NIR", Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
-                add_row(Dataset = "Vis-NIR", Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
+                        Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
+                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
+                        Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
+                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
+                        Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+
+## PXRF models ##################################################################################
+pxrf_data_allcountries <- raw_oc_data %>%
+                          select(OC, "K":"Pb") %>%
+                          mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
+                          drop_na()
+countries <- raw_oc_data %>% # keeping countries to plot later
+             select(country, OC, "K":"Pb") %>%
+             mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # trat NAs as 0
+             drop_na() %>%
+             select(country)
+
+## PLS
+control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess_pls <- c("zv", "center", "scale")
+set.seed(100)
+pxrf_pls_model <- train(OC ~ ., data = pxrf_data_allcountries, method = "pls",
+                          preProcess = preprocess_pls, trControl = control_pls)
+
+## PLS results
+pxrf_pls_pred <- pxrf_pls_model$pred %>%
+                 filter(ncomp == 3) %>% # best model with comps = 3
+                 arrange(rowIndex) %>%
+                 add_column(country = countries$country)
+rmse_pls <- min(pxrf_pls_model$results$RMSE)
+rmse_pls_text <- paste("RMSE: ", round(rmse_pls, 2))
+r2_pls <- max(pxrf_pls_model$results$Rsquared)
+r2_pls_text <- paste("R2: ", round(r2_pls, 2))
+ggplot(pxrf_pls_pred, aes(x = obs, y = pred, color = country)) +
+       prediction_plot_layout +
+       annotate_valid_scores(pxrf_pls_pred, r2_pls_text, rmse_pls_text) +
+       ggtitle("PXRF - PLS")
+ggsave("figures/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## PLS importance
+pxrf_pls_importance <- varImp(pxrf_pls_model)$importance %>%
+                       rownames_to_column("variables") %>%
+                       slice_max(n = 20, order_by = Overall) %>% # 10 biggest values
+                       arrange(Overall) %>%
+                       mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - PLS Variable Importance")
+ggsave("figures/pxrf_pls_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## RF with PCA preprocessing
+control_rf <- trainControl(method = "cv", number = 10, savePredictions = T,
+                           preProcOptions = list(pcaComp = 10)) # use 10 first PCs
+preprocess_rf <- c("zv", "center", "scale", "pca")
+set.seed(100)
+pxrf_rf_model <- train(OC ~ ., data = pxrf_data_allcountries, method = "rf",
+                       preProcess = preprocess_rf, trControl = control_rf)
+
+## RF with PCA preprocessing results
+pxrf_rf_pred <- pxrf_rf_model$pred %>%
+                filter(mtry == 2) %>% # parameter with best results
+                add_column(country = countries$country)
+rmse_rf <- min(pxrf_rf_model$results$RMSE)
+rmse_rf_text <- paste("RMSE: ", round(rmse_rf, 2))
+r2_rf <- max(pxrf_rf_model$results$Rsquared)
+r2_rf_text <- paste("R2: ", round(r2_rf, 2))
+ggplot(pxrf_rf_pred, aes(x = obs, y = pred, color = country)) +
+       prediction_plot_layout +
+       annotate_valid_scores(pxrf_rf_pred, r2_rf_text, rmse_rf_text) +
+       ggtitle("PXRF - RF")
+ggsave("figures/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## RF importance
+pxrf_rf_importance <- varImp(pxrf_rf_model)$importance %>%
+                      rownames_to_column("variables") %>%
+                      arrange(Overall) %>%
+                      mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - RF Variable Importance")
+ggsave("figures/pxrf_rf_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Cubist
+control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess_cubist <- c("zv", "center", "scale")
+set.seed(100)
+pxrf_cubist_model <- train(OC ~ ., data = pxrf_data_allcountries, method = "cubist",
+                           preProcess = preprocess_cubist, trControl = control_cubist)
+
+## Cubist results
+pxrf_cubist_pred <- pxrf_cubist_model$pred %>%
+                    filter(committees == 10, neighbors == 0) %>% # best scores
+                    add_column(country = countries$country)
+rmse_cubist <- min(pxrf_cubist_model$results$RMSE)
+rmse_cubist_text <- paste("RMSE: ", round(rmse_cubist, 2))
+r2_cubist <- max(pxrf_cubist_model$results$Rsquared)
+r2_cubist_text <- paste("R2: ", round(r2_cubist, 2))
+ggplot(pxrf_cubist_pred, aes(x = obs, y = pred, color = country)) +
+       prediction_plot_layout +
+       annotate_valid_scores(pxrf_cubist_pred, r2_cubist_text, rmse_cubist_text) +
+       ggtitle("PXRF - Cubist")
+ggsave("figures/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Cubist importance
+pxrf_cubist_importance <- varImp(pxrf_cubist_model)$importance %>%
+                          rownames_to_column("variables") %>%
+                          slice_max(n = 10, order_by = Overall) %>% # 10 biggest values
+                          arrange(Overall) %>%
+                          mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - Cubist Variable Importance")
+ggsave("figures/pxrf_cubist_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Combining model scores
+model_scores <- model_scores %>%
+                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
+                        Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
+                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
+                        Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
+                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
+                        Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
 write_excel_csv(model_scores, "tables/model_scores.csv")
