@@ -14,7 +14,7 @@ library(caret)
 
 ## Some data from Brazil has 2151 rows
 ## but most data was binned in intervals of 10 (350, 360 ... 2500)
-unbinned_oc_data <- read_excel("../data/_unbinned_oc_data.xlsx", na = "NA")
+unbinned_oc_data <- read_excel("data/_unbinned_oc_data.xlsx", na = "NA")
 unbinned_oc_spectra <- unbinned_oc_data %>%
                        select(c("355":"2500"))
 
@@ -26,7 +26,7 @@ binned_oc_spectra <- binned_oc_spectra[-215] %>% # removing band 2498 and replac
                      add_column("350" = unbinned_oc_data$`350`, .before = "360") %>%
                      add_column("2500" = unbinned_oc_data$`2500`)
 
-write_csv(binned_oc_spectra, "../data/_binned_oc_data.csv")
+write_csv(binned_oc_spectra, "data/_binned_oc_data.csv")
 
 # Functions ########################################################################################
 
@@ -142,7 +142,7 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
         select(property, bands) %>%
         drop_na() %>%
         cor() %>%
-        as.tibble() %>%
+        as_tibble() %>%
         select(property)
       x_axis <- seq(350, 2500, 10)
       plots[[i]] <- ggplot(cor_matrix[-1, ], aes(x = x_axis, y = "")) +
@@ -154,7 +154,7 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
       select(property, bands) %>%
       drop_na() %>%
       cor() %>%
-      as.tibble() %>%
+      as_tibble() %>%
       select(property)
     x_axis <- seq(350, 2500, 10)
     plots[[1]] <- ggplot(cor_matrix[-1, ], aes(x = x_axis, y = "")) +
@@ -179,21 +179,25 @@ importance_plot_layout <- list(geom_bar(stat = "identity", width = 0.2),coord_fl
 
 # Descriptive stats　###############################################################################
 
-raw_oc_data <- read_excel("../data/oc_data.xlsx", na = "NA")
+raw_oc_data <- read_excel("data/oc_data.xlsx", na = "NA")
 
 ## All countries
 desc_stats_allcountries <- raw_oc_data %>%
                            select("OC", "K":"Pb") %>%
                            descriptive_stats()
+write_excel_csv(desc_stats_allcountries, "tables/descriptive_stats_all_countries.csv")
 
 ## By country
 desc_stats_bycountries <- raw_oc_data %>%
                           select("country", "OC", "K":"Pb") %>%
                           descriptive_stats(group_by = "country")
+write_excel_csv(desc_stats_bycountries, "tables/descriptive_stats_by_country.csv")
 
 ## OC plots
 ggplot(raw_oc_data, aes(x = OC, fill = country)) +
-  geom_histogram() + hist_layout
+  geom_histogram() + hist_layout + ggtitle("OC Data - All Countries")
+ggsave("figures/pxrf_oc_histogram.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Boxplots
 create_boxplots(raw_oc_data, c("Fe", "Ca", "K"), by_country = F)
@@ -205,6 +209,8 @@ pxrf_data <- raw_oc_data %>%
              select(country, c(K:Pb))
 pxrf_hists <- create_histograms(pxrf_data, c(2:17), "country")
 ggarrange(plotlist = pxrf_hists, ncol = 4, nrow = 4, common.legend = T, legend = "bottom")
+ggsave("figures/pxrf_variables_histograms.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Vis-NIR plots
 ## No continuum removal
@@ -216,8 +222,10 @@ visnir_data <- raw_oc_data %>%
                pivot_longer(c("350":"2500"), names_to = "wavelength", values_to = "reflectance") %>%
                mutate(wavelength = as.numeric(wavelength))
 visnir_plot <- ggplot(visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
-               geom_line() + visnir_layout
+               geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra")
 visnir_labels(visnir_plot)
+ggsave("figures/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## With continuum removal
 cr_visnir_data <- raw_oc_data %>%
@@ -235,8 +243,10 @@ cr_visnir_data <- add_column(cr_visnir_data, country = c("Brazil", "France", "In
                                           values_to = "reflectance") %>%
                              mutate(wavelength = as.numeric(wavelength))
 cr_visnir_plot <- ggplot(cr_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
-                  geom_line() + visnir_layout
+                  geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - Continuum Removal")
 visnir_labels(cr_visnir_plot)
+ggsave("figures/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Savitzky-Golay + first derivative
 deriv_visnir_data <- raw_oc_data %>%
@@ -253,7 +263,9 @@ deriv_visnir_data <- add_column(deriv_visnir_data, country = c("Brazil", "France
                                    values_to = "reflectance") %>%
                      mutate(wavelength = as.numeric(wavelength))
 ggplot(deriv_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
-               geom_line() + visnir_layout
+               geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - First Derivative")
+ggsave("figures/visnir_deriv_spectra_all_countries.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Correlations
 ## PXRF correlations
@@ -265,10 +277,14 @@ cor_pxrf_pvalue <- raw_oc_data %>%
                    select(OC, c(K:Pb)) %>%
                    drop_na() %>%
                    cor.mtest(conf.level = 0.95) # calculates p-value
+png("figures/pxrf_corrplot_all_countries.png", units = "mm", res = 300,
+    width = 200, height = 200, bg = "white")
 par(family = "Times New Roman")
-corrplot(cor_pxrf, method = "color", order = "hclust", p.mat = cor_pxrf_pvalue$p, addrect = 2,
-         tl.col = "black", pch.cex = 1, sig.level = c(0.001, 0.01, 0.05), insig = "label_sig",
-         title = "PXRF vs. OC", mar = c(0, 0, 1.5, 0))
+corrplot::corrplot(cor_pxrf, method = "color", order = "hclust",
+                   p.mat = cor_pxrf_pvalue$p, addrect = 2,
+                   tl.col = "black", pch.cex = 1, sig.level = c(0.001, 0.01, 0.05),
+                   insig = "label_sig", title = "PXRF vs. OC", mar = c(0, 0, 1.5, 0))
+dev.off()
 
 ## Vis-NIR correlations
 ## All countries
@@ -284,6 +300,8 @@ cor_visnir_plot_bycountry <- create_cor_visnir(cor_visnir_bycountry, bands = c(2
 ## All Vis-NIR correlation plots
 cor_visnir_plot_list <- append(cor_visnir_plot_allcountries, cor_visnir_plot_bycountry)
 ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T, legend = "bottom")
+ggsave("figures/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
+       width = 200, height = 200, bg = "white")
 
 # Modeling　########################################################################################
 
@@ -306,16 +324,20 @@ visnir_pls_model <- train(OC ~ ., data = visnir_data_allcountries, method = "pls
                           preProcess = preprocess_pls,trControl = control_pls)
 
 ## PLS results
-visnir_pls_model # best model with comps = 3
 visnir_pls_pred <- visnir_pls_model$pred %>%
-                   filter(ncomp == 3) %>%
+                   filter(ncomp == 3) %>% # best model with comps = 3
                    arrange(rowIndex) %>%
                    add_column(country = countries$country)
-rmse_pls <- paste("RMSE: ", round(min(visnir_pls_model$results$RMSE), 2))
-r2_pls <- paste("R2: ", round(max(visnir_pls_model$results$Rsquared), 2))
+rmse_pls <- min(visnir_pls_model$results$RMSE)
+rmse_pls_text <- paste("RMSE: ", round(rmse_pls, 2))
+r2_pls <- max(visnir_pls_model$results$Rsquared)
+r2_pls_text <- paste("R2: ", round(r2_pls, 2))
 ggplot(visnir_pls_pred, aes(x = obs, y = pred, color = country)) +
        prediction_plot_layout +
-       annotate_valid_scores(visnir_pls_pred, r2_pls, rmse_pls)
+       annotate_valid_scores(visnir_pls_pred, r2_pls_text, rmse_pls_text) +
+       ggtitle("PLS")
+ggsave("figures/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## PLS coefficients
 pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
@@ -326,7 +348,9 @@ pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
              add_column(bands = seq(350, 2500, 10)) %>%
              pivot_longer(-c("bands"), names_to = "comps", values_to = "values")
 ggplot(pls_coefs, aes(x = bands, y = values, color = comps, linetype = comps)) +
-       geom_line() + visnir_layout + ylab("Coefficients")
+       geom_line() + visnir_layout + ylab("Coefficients") + ggtitle("PLS Coefficients")
+ggsave("figures/visnir_pls_coefs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## PLS importance
 visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
@@ -335,7 +359,10 @@ visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
                          arrange(Overall) %>%
                          mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
                          mutate(variables = factor(variables,levels = variables))
-ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout
+ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PLS Variable Importance")
+ggsave("figures/visnir_pls_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## RF with PCA preprocessing
 control_rf <- trainControl(method = "cv", number = 10, savePredictions = T,
@@ -344,22 +371,31 @@ preprocess_rf <- c("zv", "center", "scale", "pca")
 set.seed(100)
 visnir_rf_model <- train(OC ~ ., data = visnir_data_allcountries, method = "rf",
                           preProcess = preprocess_rf,trControl = control_rf)
-visnir_rf_model
+
 ## RF with PCA preprocessing results
 visnir_rf_pred <- visnir_rf_model$pred %>%
                   filter(mtry == 2) %>%
                   add_column(country = countries$country)
-rmse_rf <- paste("RMSE: ", round(min(visnir_rf_model$results$RMSE), 2))
-r2_rf <- paste("R2: ", round(max(visnir_rf_model$results$Rsquared), 2))
+rmse_rf <- min(visnir_rf_model$results$RMSE)
+rmse_rf_text <- paste("RMSE: ", round(rmse_rf, 2))
+r2_rf <- max(visnir_rf_model$results$Rsquared)
+r2_rf_text <- paste("R2: ", round(r2_rf, 2))
 ggplot(visnir_rf_pred, aes(x = obs, y = pred, color = country)) +
       prediction_plot_layout +
-      annotate_valid_scores(visnir_rf_pred, r2_rf, rmse_rf)
+      annotate_valid_scores(visnir_rf_pred, r2_rf_text, rmse_rf_text) +
+      ggtitle("RF")
+ggsave("figures/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
+## RF importance
 visnir_rf_importance <- varImp(visnir_rf_model)$importance %>%
                         rownames_to_column("variables") %>%
                         arrange(Overall) %>%
                         mutate(variables = factor(variables,levels = variables))
-ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout
+ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+      ggtitle("RF Variable Importance")
+ggsave("figures/visnir_rf_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Cubist
 control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
@@ -372,11 +408,16 @@ visnir_cubist_model <- train(OC ~ ., data = visnir_data_allcountries, method = "
 visnir_cubist_pred <- visnir_cubist_model$pred %>%
                   filter(committees == 20, neighbors == 0) %>% # best scores
                   add_column(country = countries$country)
-rmse_cubist <- paste("RMSE: ", round(min(visnir_cubist_model$results$RMSE), 2))
-r2_cubist <- paste("R2: ", round(max(visnir_cubist_model$results$Rsquared), 2))
+rmse_cubist <- min(visnir_cubist_model$results$RMSE)
+rmse_cubist_text <- paste("RMSE: ", round(rmse_cubist, 2))
+r2_cubist <- max(visnir_cubist_model$results$Rsquared)
+r2_cubist_text <- paste("R2: ", round(r2_cubist, 2))
 ggplot(visnir_cubist_pred, aes(x = obs, y = pred, color = country)) +
       prediction_plot_layout +
-      annotate_valid_scores(visnir_cubist_pred, r2_cubist, rmse_cubist)
+      annotate_valid_scores(visnir_cubist_pred, r2_cubist_text, rmse_cubist_text) +
+      ggtitle("Cubist")
+ggsave("figures/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
 
 ## Cubist importance
 visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
@@ -385,4 +426,15 @@ visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
                         arrange(Overall) %>%
                         mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
                         mutate(variables = factor(variables,levels = variables))
-ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout
+ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+      ggtitle("Cubist")
+ggsave("figures/visnir_cubist_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Combining model scores
+model_scores <- tibble(Dataset = character(), Model = character(),
+                       RMSE = numeric(), R2 = numeric()) %>%
+                add_row(Dataset = "Vis-NIR", Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
+                add_row(Dataset = "Vis-NIR", Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
+                add_row(Dataset = "Vis-NIR", Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+write_excel_csv(model_scores, "tables/model_scores.csv")
