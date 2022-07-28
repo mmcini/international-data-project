@@ -310,35 +310,54 @@ ggsave("figures/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
 
 ## Vis-NIR models ##################################################################################
 visnir_data_allcountries <- raw_oc_data %>%
-                            select(OC, "350":"2500") %>%
-                            drop_na()
-countries <- raw_oc_data %>% # keeping countries to plot later
-            select(country, OC, "350":"2500") %>%
-            drop_na() %>%
-            select(country)
+                            select(country, OC, "350":"2500") %>%
+                            drop_na() %>%
+                            # substituting numbers by legal variable names
+                            rename_with(~ str_replace(., "^[0-9]+$", paste0("band_",. , "_nm")))
+set.seed(100)
+partition_index <- createDataPartition(visnir_data_allcountries$OC, p = 0.8, list = F)
+visnir_train_data <- visnir_data_allcountries %>%
+                     slice(partition_index)
+visnir_valid_data <- visnir_data_allcountries %>%
+                     slice(-partition_index)
 
 ## PLS
 control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_pls <- c("zv", "center", "scale")
+preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
-visnir_pls_model <- train(OC ~ ., data = visnir_data_allcountries, method = "pls",
+visnir_pls_model <- train(OC ~ ., data = visnir_train_data[-1], method = "pls",
                           preProcess = preprocess_pls, trControl = control_pls)
 
-## PLS results
-visnir_pls_pred <- visnir_pls_model$pred %>%
-                   filter(ncomp == 3) %>% # best model with comps = 3
-                   arrange(rowIndex) %>%
-                   add_column(country = countries$country)
+## PLS results - kfold cross validation and hold-out validation
+visnir_pls_cv <- visnir_pls_model$pred %>%
+                 filter(ncomp == 3) %>% # best model with comps = 3
+                 arrange(rowIndex) %>%
+                 add_column(country = visnir_train_data$country)
 rmse_pls <- min(visnir_pls_model$results$RMSE)
 rmse_pls_text <- paste("RMSE: ", round(rmse_pls, 2))
 r2_pls <- max(visnir_pls_model$results$Rsquared)
 r2_pls_text <- paste("R2: ", round(r2_pls, 2))
-ggplot(visnir_pls_pred, aes(x = obs, y = pred, color = country)) +
-       prediction_plot_layout +
-       annotate_valid_scores(visnir_pls_pred, r2_pls_text, rmse_pls_text) +
-       ggtitle("Vis-NIR - PLS")
+visnir_pls_cvplot <- ggplot(visnir_pls_cv, aes(x = obs, y = pred, color = country)) +
+                     prediction_plot_layout +
+                     annotate_valid_scores(visnir_pls_cv, r2_pls_text, rmse_pls_text) +
+                     ggtitle("Vis-NIR - PLS (Cross-Validation)")
+visnir_pls_valid <- predict(visnir_pls_model, newdata = visnir_valid_data) %>%
+                    as_tibble() %>%
+                    add_column(obs= visnir_valid_data$OC) %>%
+                    add_column(country = visnir_valid_data$country) %>%
+                    rename(pred = value)
+rmse_pls <- RMSE(pred = visnir_pls_valid$pred, obs = visnir_pls_valid$obs)
+rmse_pls_text <- paste("RMSE: ", round(rmse_pls, 2))
+r2_pls <- caret::R2(pred = visnir_pls_valid$pred, obs = visnir_pls_valid$obs)
+r2_pls_text <- paste("R2: ", round(r2_pls, 2))
+visnir_pls_validplot <- ggplot(visnir_pls_valid, aes(x = obs, y = pred, color = country)) +
+                     prediction_plot_layout +
+                     annotate_valid_scores(visnir_pls_valid, r2_pls_text, rmse_pls_text) +
+                     ggtitle("Vis-NIR - PLS (Hold-out Validation)")
+
+ggarrange(visnir_pls_cvplot, visnir_pls_validplot, ncol = 2, common.legend = T, legend = "bottom")
 ggsave("figures/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
-       width = 200, height = 150, bg = "white")
+       width = 250, height = 150, bg = "white")
 
 ## PLS coefficients
 pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
@@ -357,7 +376,7 @@ ggsave("figures/visnir_pls_coefs.png", dpi = 300, units = "mm",
 ## PLS importance
 visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
                          rownames_to_column("variables") %>%
-                         slice_max(n = 20, order_by = Overall) %>% # 10 biggest values
+                         slice_max(n = 30, order_by = Overall) %>% # 10 biggest values
                          arrange(Overall) %>%
                          mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
                          mutate(variables = factor(variables,levels = variables))
@@ -443,23 +462,35 @@ model_scores <- tibble(Dataset = character(), n = numeric(), Model = character()
                 add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
                         Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
 
-## PXRF models ##################################################################################
+## PXRF models #####################################################################################
 pxrf_data_allcountries <- raw_oc_data %>%
                           select(OC, "K":"Pb") %>%
                           mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
                           drop_na()
 countries <- raw_oc_data %>% # keeping countries to plot later
              select(country, OC, "K":"Pb") %>%
-             mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # trat NAs as 0
+             mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
              drop_na() %>%
              select(country)
 
+## Feature selection using RF
+control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
+
+set.seed(100)
+pxrf_feat_select <- rfe(pxrf_data_allcountries[-1], pxrf_data_allcountries[, 1, drop = T],
+                        sizes = c(1:16), rfeControl = control_rfe)
+predictors(pxrf_feat_select)
+##  [1] "Ca" "K"  "Sr" "Zr" "Fe" "Zn" "Mn" "Cu" "Rb" "V"  "Ti" "Pb" "Cr" "Ni"
+
+pxrf_data_allcountries <- pxrf_data_allcountries %>%
+                          select(OC, predictors(pxrf_feat_select))
+
 ## PLS
 control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_pls <- c("zv", "center", "scale")
+preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
 pxrf_pls_model <- train(OC ~ ., data = pxrf_data_allcountries, method = "pls",
-                          preProcess = preprocess_pls, trControl = control_pls)
+                        preProcess = preprocess_pls, trControl = control_pls)
 
 ## PLS results
 pxrf_pls_pred <- pxrf_pls_model$pred %>%
@@ -495,7 +526,7 @@ set.seed(100)
 pxrf_rf_model <- train(OC ~ ., data = pxrf_data_allcountries, method = "rf",
                        preProcess = preprocess_rf, trControl = control_rf)
 
-## RF
+## RF results
 pxrf_rf_pred <- pxrf_rf_model$pred %>%
                 filter(mtry == 9) %>% # parameter with best results
                 add_column(country = countries$country)
