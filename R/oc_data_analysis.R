@@ -383,7 +383,7 @@ visnir_pls_cv <- visnir_pls_model$pred %>%
                  add_column(country = visnir_train_data$country)
 visnir_pls_valid <- predict(visnir_pls_model, newdata = visnir_valid_data) %>%
                     as_tibble() %>%
-                    add_column(obs= visnir_valid_data$OC) %>%
+                    add_column(obs = visnir_valid_data$OC) %>%
                     add_column(country = visnir_valid_data$country) %>%
                     rename(pred = value)
 visnir_pls_plots <- validation_plot(visnir_pls_cv, visnir_pls_valid, "Vis-NIR", "PLS")
@@ -431,7 +431,7 @@ visnir_rf_cv <- visnir_rf_model$pred %>%
                 add_column(country = visnir_train_data$country)
 visnir_rf_valid <- predict(visnir_rf_model, newdata = visnir_valid_data) %>%
                    as_tibble() %>%
-                   add_column(obs= visnir_valid_data$OC) %>%
+                   add_column(obs = visnir_valid_data$OC) %>%
                    add_column(country = visnir_valid_data$country) %>%
                    rename(pred = value)
 visnir_rf_plots <- validation_plot(visnir_rf_cv, visnir_rf_valid, "Vis-NIR", "RF")
@@ -465,7 +465,7 @@ visnir_cubist_cv <- visnir_cubist_model$pred %>%
                     add_column(country = visnir_train_data$country)
 visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data) %>%
                        as_tibble() %>%
-                       add_column(obs= visnir_valid_data$OC) %>%
+                       add_column(obs = visnir_valid_data$OC) %>%
                        add_column(country = visnir_valid_data$country) %>%
                        rename(pred = value)
 visnir_cubist_plots <- validation_plot(visnir_cubist_cv, visnir_cubist_valid, "Vis-NIR", "Cubist")
@@ -486,14 +486,28 @@ ggsave("figures/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
-model_scores <- tibble(Dataset = character(), n = numeric(), Model = character(),
-                       RMSE = numeric(), R2 = numeric()) %>%
-                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries), Model = "PLS",
-                        RMSE = rmse_pls, R2 = r2_pls) %>%
-                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
-                        Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
-                add_row(Dataset = "Vis-NIR", n = nrow(visnir_data_allcountries),
-                        Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+model_scores <- tibble(Dataset = character(), Model = character(),
+                       n_cv = numeric(), n_valid = numeric(),
+                       RMSE_cv = numeric(), RMSE_valid = numeric(),
+                       R2_cv = numeric(), R2_valid = numeric()) %>%
+                add_row(Dataset = "Vis-NIR", Model = "PLS",
+                        n_cv = nrow(visnir_pls_cv), n_valid = nrow(visnir_pls_valid),
+                        RMSE_cv = RMSE(visnir_pls_cv$pred, visnir_pls_cv$obs),
+                        R2_cv = caret::R2(visnir_pls_cv$pred, visnir_pls_cv$obs),
+                        RMSE_valid = RMSE(visnir_pls_valid$pred, visnir_pls_valid$obs),
+                        R2_valid = caret::R2(visnir_pls_valid$pred, visnir_pls_valid$obs)) %>%
+                add_row(Dataset = "Vis-NIR", Model = "RF",
+                        n_cv = nrow(visnir_rf_cv), n_valid = nrow(visnir_rf_valid),
+                        RMSE_cv = RMSE(visnir_rf_cv$pred, visnir_rf_cv$obs),
+                        R2_cv = caret::R2(visnir_rf_cv$pred, visnir_rf_cv$obs),
+                        RMSE_valid = RMSE(visnir_rf_valid$pred, visnir_rf_valid$obs),
+                        R2_valid = caret::R2(visnir_rf_valid$pred, visnir_rf_valid$obs)) %>%
+                add_row(Dataset = "Vis-NIR", Model = "Cubist",
+                        n_cv = nrow(visnir_cubist_cv), n_valid = nrow(visnir_cubist_valid),
+                        RMSE_cv = RMSE(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
+                        R2_cv = caret::R2(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
+                        RMSE_valid = RMSE(visnir_cubist_valid$pred, visnir_cubist_valid$obs),
+                        R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs))
 
 ## PXRF models #####################################################################################
 pxrf_data_allcountries <- raw_oc_data %>%
@@ -533,7 +547,7 @@ pxrf_pls_cv <- pxrf_pls_model$pred %>%
                add_column(country = pxrf_train_data$country)
 pxrf_pls_valid <- predict(pxrf_pls_model, newdata = pxrf_valid_data) %>%
                   as_tibble() %>%
-                  add_column(obs= pxrf_valid_data$OC) %>%
+                  add_column(obs = pxrf_valid_data$OC) %>%
                   add_column(country = pxrf_valid_data$country) %>%
                   rename(pred = value)
 pxrf_pls_plots <- validation_plot(pxrf_pls_cv, pxrf_pls_valid, "PXRF", "PLS")
@@ -620,12 +634,24 @@ ggsave("figures/pxrf_cubist_importance.png", dpi = 300, units = "mm",
 
 ## Combining model scores
 model_scores <- model_scores %>%
-                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
-                        Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
-                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
-                        Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
-                add_row(Dataset = "PXRF", n = nrow(pxrf_data_allcountries),
-                        Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+                add_row(Dataset = "PXRF", Model = "PLS",
+                        n_cv = nrow(pxrf_pls_cv), n_valid = nrow(pxrf_pls_valid),
+                        RMSE_cv = RMSE(pxrf_pls_cv$pred, pxrf_pls_cv$obs),
+                        R2_cv = caret::R2(pxrf_pls_cv$pred, pxrf_pls_cv$obs),
+                        RMSE_valid = RMSE(pxrf_pls_valid$pred, pxrf_pls_valid$obs),
+                        R2_valid = caret::R2(pxrf_pls_valid$pred, pxrf_pls_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "RF",
+                        n_cv = nrow(pxrf_rf_cv), n_valid = nrow(pxrf_rf_valid),
+                        RMSE_cv = RMSE(pxrf_rf_cv$pred, pxrf_rf_cv$obs),
+                        R2_cv = caret::R2(pxrf_rf_cv$pred, pxrf_rf_cv$obs),
+                        RMSE_valid = RMSE(pxrf_rf_valid$pred, pxrf_rf_valid$obs),
+                        R2_valid = caret::R2(pxrf_rf_valid$pred, pxrf_rf_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "Cubist",
+                        n_cv = nrow(pxrf_cubist_cv), n_valid = nrow(pxrf_cubist_valid),
+                        RMSE_cv = RMSE(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
+                        R2_cv = caret::R2(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
+                        RMSE_valid = RMSE(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs),
+                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs))
 
 ## PXRF + Vis-NIR (pv) models ######################################################################
 pv_data_allcountries <- raw_oc_data %>%
@@ -657,7 +683,7 @@ pv_pls_cv <- pv_pls_model$pred %>%
              add_column(country = pv_train_data$country)
 pv_pls_valid <- predict(pv_pls_model, newdata = pv_valid_data) %>%
                 as_tibble() %>%
-                add_column(obs= pv_valid_data$OC) %>%
+                add_column(obs = pv_valid_data$OC) %>%
                 add_column(country = pv_valid_data$country) %>%
                 rename(pred = value)
 pv_pls_plots <- validation_plot(pv_pls_cv, pv_pls_valid, "PXRF + Vis-NIR", "PLS")
@@ -692,7 +718,7 @@ pv_rf_cv <- pv_rf_model$pred %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
                as_tibble() %>%
-               add_column(obs= pv_valid_data$OC) %>%
+               add_column(obs = pv_valid_data$OC) %>%
                add_column(country = pv_valid_data$country) %>%
                rename(pred = value)
 pv_rf_plots <- validation_plot(pv_rf_cv, pv_rf_valid, "PXRF + Vis-NIR", "RF")
@@ -727,7 +753,7 @@ pv_cubist_cv <- pv_cubist_model$pred %>%
                 add_column(country = pv_train_data$country)
 pv_cubist_valid <- predict(pv_cubist_model, newdata = pv_valid_data) %>%
                    as_tibble() %>%
-                   add_column(obs= pv_valid_data$OC) %>%
+                   add_column(obs = pv_valid_data$OC) %>%
                    add_column(country = pv_valid_data$country) %>%
                    rename(pred = value)
 pv_cubist_plots <- validation_plot(pv_cubist_cv, pv_cubist_valid, "PXRF + Vis-NIR", "Cubist")
@@ -749,10 +775,22 @@ ggsave("figures/pv_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 model_scores <- model_scores %>%
-                add_row(Dataset = "PXRF + Vis-NIR", n = nrow(pv_data_allcountries),
-                        Model = "PLS", RMSE = rmse_pls, R2 = r2_pls) %>%
-                add_row(Dataset = "PXRF + Vis-NIR", n = nrow(pv_data_allcountries),
-                        Model = "RF", RMSE = rmse_rf, R2 = r2_rf) %>%
-                add_row(Dataset = "PXRF + Vis-NIR", n = nrow(pv_data_allcountries),
-                        Model = "Cubist", RMSE = rmse_cubist, R2 = r2_cubist)
+                add_row(Dataset = "PXRF + Vis-NIR", Model = "PLS",
+                        n_cv = nrow(pv_pls_cv), n_valid = nrow(pv_pls_valid),
+                        RMSE_cv = RMSE(pv_pls_cv$pred, pv_pls_cv$obs),
+                        R2_cv = caret::R2(pv_pls_cv$pred, pv_pls_cv$obs),
+                        RMSE_valid = RMSE(pv_pls_valid$pred, pv_pls_valid$obs),
+                        R2_valid = caret::R2(pv_pls_valid$pred, pv_pls_valid$obs)) %>%
+                add_row(Dataset = "PXRF + Vis-NIR", Model = "RF",
+                        n_cv = nrow(pv_rf_cv), n_valid = nrow(pv_rf_valid),
+                        RMSE_cv = RMSE(pv_rf_cv$pred, pv_rf_cv$obs),
+                        R2_cv = caret::R2(pv_rf_cv$pred, pv_rf_cv$obs),
+                        RMSE_valid = RMSE(pv_rf_valid$pred, pv_rf_valid$obs),
+                        R2_valid = caret::R2(pv_rf_valid$pred, pv_rf_valid$obs)) %>%
+                add_row(Dataset = "PXRF + Vis-NIR", Model = "Cubist",
+                        n_cv = nrow(pv_cubist_cv), n_valid = nrow(pv_cubist_valid),
+                        RMSE_cv = RMSE(pv_cubist_cv$pred, pv_cubist_cv$obs),
+                        R2_cv = caret::R2(pv_cubist_cv$pred, pv_cubist_cv$obs),
+                        RMSE_valid = RMSE(pv_cubist_valid$pred, pv_cubist_valid$obs),
+                        R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs))
 write_excel_csv(model_scores, "tables/model_scores.csv")
