@@ -14,7 +14,7 @@ library(caret)
 
 ## Some data from Brazil has 2151 rows
 ## but most data was binned in intervals of 10 (350, 360 ... 2500)
-unbinned_oc_data <- read_excel("data/_unbinned_oc_data.xlsx", na = "NA")
+unbinned_oc_data <- read_excel("data/_unbinned_data.xlsx", na = "NA")
 unbinned_oc_spectra <- unbinned_oc_data %>%
                        select(c("355":"2500"))
 
@@ -26,7 +26,7 @@ binned_oc_spectra <- binned_oc_spectra[-215] %>% # removing band 2498 and replac
                      add_column("350" = unbinned_oc_data$`350`, .before = "360") %>%
                      add_column("2500" = unbinned_oc_data$`2500`)
 
-write_csv(binned_oc_spectra, "data/_binned_oc_data.csv")
+write_csv(binned_oc_spectra, "data/_binned_data.csv")
 
 # Functions ########################################################################################
 
@@ -224,24 +224,24 @@ importance_plot_layout <- list(geom_bar(stat = "identity", width = 0.2),coord_fl
 
 # Descriptive stats　###############################################################################
 
-raw_oc_data <- read_excel("data/oc_data.xlsx", na = "NA")
+raw_oc_data <- read_excel("data/oc_texture_data.xlsx", na = "NA")
 
 ## All countries
 desc_stats_allcountries <- raw_oc_data %>%
                            select("OC", "K":"Pb") %>%
                            descriptive_stats()
-write_excel_csv(desc_stats_allcountries, "tables/descriptive_stats_all_countries.csv")
+write_excel_csv(desc_stats_allcountries, "tables/OC/descriptive_stats_all_countries.csv")
 
 ## By country
 desc_stats_bycountries <- raw_oc_data %>%
                           select("country", "OC", "K":"Pb") %>%
                           descriptive_stats(group_by = "country")
-write_excel_csv(desc_stats_bycountries, "tables/descriptive_stats_by_country.csv")
+write_excel_csv(desc_stats_bycountries, "tables/OC/descriptive_stats_by_country.csv")
 
 ## OC plots
 ggplot(raw_oc_data, aes(x = OC, fill = country)) +
   geom_histogram() + hist_layout + ggtitle("OC Data - All Countries")
-ggsave("figures/pxrf_oc_histogram.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_oc_histogram.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Boxplots
@@ -254,7 +254,7 @@ pxrf_data <- raw_oc_data %>%
              select(country, c(K:Pb))
 pxrf_hists <- create_histograms(pxrf_data, c(2:17), "country")
 ggarrange(plotlist = pxrf_hists, ncol = 4, nrow = 4, common.legend = T, legend = "bottom")
-ggsave("figures/pxrf_variables_histograms.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_variables_histograms.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Vis-NIR plots
@@ -269,7 +269,7 @@ visnir_data <- raw_oc_data %>%
 visnir_plot <- ggplot(visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra")
 visnir_labels(visnir_plot)
-ggsave("figures/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## With continuum removal
@@ -290,7 +290,7 @@ cr_visnir_data <- add_column(cr_visnir_data, country = c("Brazil", "France", "In
 cr_visnir_plot <- ggplot(cr_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                   geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - Continuum Removal")
 visnir_labels(cr_visnir_plot)
-ggsave("figures/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Savitzky-Golay + first derivative
@@ -309,7 +309,7 @@ deriv_visnir_data <- add_column(deriv_visnir_data, country = c("Brazil", "France
                      mutate(wavelength = as.numeric(wavelength))
 ggplot(deriv_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - First Derivative")
-ggsave("figures/visnir_deriv_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_deriv_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Correlations
@@ -322,7 +322,7 @@ cor_pxrf_pvalue <- raw_oc_data %>%
                    select(OC, c(K:Pb)) %>%
                    drop_na() %>%
                    cor.mtest(conf.level = 0.95) # calculates p-value
-png("figures/pxrf_corrplot_all_countries.png", units = "mm", res = 300,
+png("figures/OC/pxrf_corrplot_all_countries.png", units = "mm", res = 300,
     width = 200, height = 200, bg = "white")
 par(family = "Times New Roman")
 corrplot::corrplot(cor_pxrf, method = "color", order = "hclust",
@@ -345,7 +345,7 @@ cor_visnir_plot_bycountry <- create_cor_visnir(cor_visnir_bycountry, bands = c(2
 ## All Vis-NIR correlation plots
 cor_visnir_plot_list <- append(cor_visnir_plot_allcountries, cor_visnir_plot_bycountry)
 ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T, legend = "bottom")
-ggsave("figures/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 200, bg = "white")
 
 # Modeling　########################################################################################
@@ -388,7 +388,7 @@ visnir_pls_valid <- predict(visnir_pls_model, newdata = visnir_valid_data) %>%
                     rename(pred = value)
 visnir_pls_plots <- validation_plot(visnir_pls_cv, visnir_pls_valid, "Vis-NIR", "PLS")
 ggarrange(plotlist = visnir_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS coefficients
@@ -402,7 +402,7 @@ pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
 ggplot(pls_coefs, aes(x = bands, y = values, color = comps, linetype = comps)) +
        geom_line() + visnir_layout + ylab("Coefficients") +
        ggtitle("Vis-NIR - PLS Coefficients")
-ggsave("figures/visnir_pls_coefs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_pls_coefs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## PLS importance
@@ -414,7 +414,7 @@ visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
                          mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("Vis-NIR - PLS Variable Importance")
-ggsave("figures/visnir_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
@@ -436,7 +436,7 @@ visnir_rf_valid <- predict(visnir_rf_model, newdata = visnir_valid_data) %>%
                    rename(pred = value)
 visnir_rf_plots <- validation_plot(visnir_rf_cv, visnir_rf_valid, "Vis-NIR", "RF")
 ggarrange(plotlist = visnir_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -448,7 +448,7 @@ visnir_rf_importance <- varImp(visnir_rf_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
       ggtitle("Vis-NIR - RF Variable Importance")
-ggsave("figures/visnir_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
@@ -470,7 +470,7 @@ visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data)
                        rename(pred = value)
 visnir_cubist_plots <- validation_plot(visnir_cubist_cv, visnir_cubist_valid, "Vis-NIR", "Cubist")
 ggarrange(plotlist = visnir_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -482,7 +482,7 @@ visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("Vis-NIR - Cubist Variable Importance")
-ggsave("figures/visnir_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
@@ -552,7 +552,7 @@ pxrf_pls_valid <- predict(pxrf_pls_model, newdata = pxrf_valid_data) %>%
                   rename(pred = value)
 pxrf_pls_plots <- validation_plot(pxrf_pls_cv, pxrf_pls_valid, "PXRF", "PLS")
 ggarrange(plotlist = pxrf_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS importance
@@ -563,7 +563,7 @@ pxrf_pls_importance <- varImp(pxrf_pls_model)$importance %>%
                        mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - PLS Variable Importance")
-ggsave("figures/pxrf_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
@@ -585,7 +585,7 @@ pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
                  rename(pred = value)
 pxrf_rf_plots <- validation_plot(pxrf_rf_cv, pxrf_rf_valid, "PXRF", "RF")
 ggarrange(plotlist = pxrf_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -596,7 +596,7 @@ pxrf_rf_importance <- varImp(pxrf_rf_model)$importance %>%
                       mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - RF Variable Importance")
-ggsave("figures/pxrf_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
@@ -618,7 +618,7 @@ pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
                        rename(pred = value)
 pxrf_cubist_plots <- validation_plot(pxrf_cubist_cv, pxrf_cubist_valid, "PXRF", "Cubist")
 ggarrange(plotlist = pxrf_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -629,7 +629,7 @@ pxrf_cubist_importance <- varImp(pxrf_cubist_model)$importance %>%
                           mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - Cubist Variable Importance")
-ggsave("figures/pxrf_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pxrf_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
@@ -688,7 +688,7 @@ pv_pls_valid <- predict(pv_pls_model, newdata = pv_valid_data) %>%
                 rename(pred = value)
 pv_pls_plots <- validation_plot(pv_pls_cv, pv_pls_valid, "PXRF + Vis-NIR", "PLS")
 ggarrange(plotlist = pv_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pv_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS importance
@@ -701,7 +701,7 @@ pv_pls_importance <- varImp(pv_pls_model)$importance %>%
                      mutate(variables = factor(variables,levels = variables))
 ggplot(pv_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - PLS Variable Importance")
-ggsave("figures/pv_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
@@ -723,7 +723,7 @@ pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
                rename(pred = value)
 pv_rf_plots <- validation_plot(pv_rf_cv, pv_rf_valid, "PXRF + Vis-NIR", "RF")
 ggarrange(plotlist = pv_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pv_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -736,7 +736,7 @@ pv_rf_importance <- varImp(pv_rf_model)$importance %>%
                     mutate(variables = factor(variables,levels = variables))
 ggplot(pv_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - RF Variable Importance")
-ggsave("figures/pv_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
@@ -758,7 +758,7 @@ pv_cubist_valid <- predict(pv_cubist_model, newdata = pv_valid_data) %>%
                    rename(pred = value)
 pv_cubist_plots <- validation_plot(pv_cubist_cv, pv_cubist_valid, "PXRF + Vis-NIR", "Cubist")
 ggarrange(plotlist = pv_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/pv_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -771,7 +771,7 @@ pv_cubist_importance <- varImp(pv_cubist_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(pv_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - Cubist Variable Importance")
-ggsave("figures/pv_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/OC/pv_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 model_scores <- model_scores %>%
@@ -793,4 +793,4 @@ model_scores <- model_scores %>%
                         R2_cv = caret::R2(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         RMSE_valid = RMSE(pv_cubist_valid$pred, pv_cubist_valid$obs),
                         R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs))
-write_excel_csv(model_scores, "tables/model_scores.csv")
+write_excel_csv(model_scores, "tables/OC/model_scores.csv")
