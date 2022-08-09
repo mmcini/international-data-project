@@ -5,6 +5,9 @@ source("R/_functions.R")
 # Modeling　########################################################################################
 
 ## All countries ###################################################################################
+## Control and preprocessing parameters
+control <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess <- c("nzv", "center", "scale")
 
 ## Vis-NIR models ##################################################################################
 ## Training and validation data
@@ -24,11 +27,9 @@ visnir_valid_data <- visnir_data_allcountries %>%
 
 ## Models
 ## PLS
-control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
 visnir_pls_model <- train(OC ~ ., data = visnir_train_data[-1], method = "pls",
-                          preProcess = preprocess_pls, trControl = control_pls)
+                          preProcess = preprocess, trControl = control)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_pls_cv <- visnir_pls_model$pred %>%
@@ -72,11 +73,9 @@ ggsave("figures/OC/visnir_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
-control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
 visnir_rf_model <- train(OC ~ ., data = visnir_train_data[-1], method = "rf",
-                         preProcess = preprocess_rf, trControl = control_rf)
+                         preProcess = preprocess, trControl = control)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_rf_cv <- visnir_rf_model$pred %>%
@@ -106,11 +105,9 @@ ggsave("figures/OC/visnir_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
-control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
 visnir_cubist_model <- train(OC ~ ., data = visnir_train_data[-1], method = "cubist",
-                             preProcess = preprocess_cubist, trControl = control_cubist)
+                             preProcess = preprocess, trControl = control)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_cubist_cv <- visnir_cubist_model$pred %>%
@@ -188,11 +185,9 @@ pxrf_valid_data <- pxrf_data_allcountries %>%
                    slice(-partition_index)
 
 ## PLS
-control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
 pxrf_pls_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "pls",
-                        preProcess = preprocess_pls, trControl = control_pls)
+                        preProcess = preprocess, trControl = control)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_pls_cv <- pxrf_pls_model$pred %>%
@@ -221,11 +216,9 @@ ggsave("figures/OC/pxrf_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
-control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
 pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
-                       preProcess = preprocess_rf, trControl = control_rf)
+                       preProcess = preprocess, trControl = control)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_rf_cv <- pxrf_rf_model$pred %>%
@@ -258,7 +251,7 @@ control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
 pxrf_cubist_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "cubist",
-                           preProcess = preprocess_cubist, trControl = control_cubist)
+                           preProcess = preprocess, trControl = control)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
@@ -324,11 +317,9 @@ pv_valid_data <- pv_data_allcountries %>%
                  slice(-partition_index)
 
 ## PLS
-control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
 pv_pls_model <- train(OC ~ ., data = pv_train_data[-1], method = "pls",
-                      preProcess = preprocess_pls, trControl = control_pls)
+                      preProcess = preprocess, trControl = control)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
 pv_pls_cv <- pv_pls_model$pred %>%
@@ -359,11 +350,9 @@ ggsave("figures/OC/pv_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
-control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
 pv_rf_model <- train(OC ~ ., data = pv_train_data[-1], method = "rf",
-                     preProcess = preprocess_rf, trControl = control_rf)
+                     preProcess = preprocess, trControl = control)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pv_rf_cv <- pv_rf_model$pred %>%
@@ -394,11 +383,9 @@ ggsave("figures/OC/pv_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
-control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
 pv_cubist_model <- train(OC ~ ., data = pv_train_data[-1], method = "cubist",
-                         preProcess = preprocess_cubist, trControl = control_cubist)
+                         preProcess = preprocess, trControl = control)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pv_cubist_cv <- pv_cubist_model$pred %>%
