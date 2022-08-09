@@ -10,24 +10,6 @@ library(ggpubr)
 library(readxl)
 library(caret)
 
-# Merging Vis-NIR data/fixing format　##############################################################
-
-## Some data from Brazil has 2151 rows
-## but most data was binned in intervals of 10 (350, 360 ... 2500)
-unbinned_oc_data <- read_excel("data/_unbinned_data.xlsx", na = "NA")
-unbinned_oc_spectra <- unbinned_oc_data %>%
-                       select(c("355":"2500"))
-
-## Creating bins between 360 and 2498 and adding columns 350 and 2500
-## This is the format of the rest of the data
-binned_oc_spectra <- binning(unbinned_oc_spectra, bin.size = 10) %>%
-                     as_tibble()
-binned_oc_spectra <- binned_oc_spectra[-215] %>% # removing band 2498 and replacing for 2500
-                     add_column("350" = unbinned_oc_data$`350`, .before = "360") %>%
-                     add_column("2500" = unbinned_oc_data$`2500`)
-
-write_csv(binned_oc_spectra, "data/_binned_data.csv")
-
 # Functions ########################################################################################
 
 ## Functions not related to plots
@@ -164,14 +146,14 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
   return(plots)
 }
 ## Prediction plots
-prediction_plot_layout <- list(xlab("Observed OC (%)"), ylab("Predicted OC (%)"),
+prediction_plot_layout <- list(xlab("Observed Silt (%)"), ylab("Predicted Silt (%)"),
                                geom_point(), geom_abline(slope = 1), theme_bw(),
                                theme(text = element_text(family = "Times New Roman"),
                                      legend.title = element_blank()))
 annotate_valid_scores <- function(data, r2, rmse) {
   ## data must have pred and obs columns for relative positioning
   annotate("text", label = c(r2, rmse), x = min(data$obs),
-           y = c(max(data$pred), max(data$pred) - 0.3),
+           y = c(max(data$pred), max(data$pred) - 3),
            vjust = 0, hjust = 0, family = "Times New Roman")
 }
 mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
@@ -224,42 +206,42 @@ importance_plot_layout <- list(geom_bar(stat = "identity", width = 0.2),coord_fl
 
 # Descriptive stats　###############################################################################
 
-raw_oc_data <- read_excel("data/oc_texture_data.xlsx", na = "NA")
+raw_silt_data <- read_excel("data/oc_texture_data.xlsx", na = "NA")
 
 ## All countries
-desc_stats_allcountries <- raw_oc_data %>%
-                           select("OC", "K":"Pb") %>%
+desc_stats_allcountries <- raw_silt_data %>%
+                           select("silt", "K":"Pb") %>%
                            descriptive_stats()
-write_excel_csv(desc_stats_allcountries, "tables/OC/descriptive_stats_all_countries.csv")
+write_excel_csv(desc_stats_allcountries, "tables/silt/descriptive_stats_all_countries.csv")
 
 ## By country
-desc_stats_bycountries <- raw_oc_data %>%
-                          select("country", "OC", "K":"Pb") %>%
+desc_stats_bycountries <- raw_silt_data %>%
+                          select("country", "silt", "K":"Pb") %>%
                           descriptive_stats(group_by = "country")
-write_excel_csv(desc_stats_bycountries, "tables/OC/descriptive_stats_by_country.csv")
+write_excel_csv(desc_stats_bycountries, "tables/silt/descriptive_stats_by_country.csv")
 
-## OC plots
-ggplot(raw_oc_data, aes(x = OC, fill = country)) +
-  geom_histogram() + hist_layout + ggtitle("OC Data - All Countries")
-ggsave("figures/OC/pxrf_oc_histogram.png", dpi = 300, units = "mm",
+## silt plots
+ggplot(raw_silt_data, aes(x = silt, fill = country)) +
+  geom_histogram() + hist_layout + ggtitle("silt Data - All Countries")
+ggsave("figures/silt/pxrf_oc_histogram.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Boxplots
-create_boxplots(raw_oc_data, c("Fe", "Ca", "K"), by_country = F)
-create_boxplots(raw_oc_data, c("country","Ti"), by_country = T)
-create_boxplots(raw_oc_data, c("country","OC"), by_country = T)
+create_boxplots(raw_silt_data, c("Fe", "Ca", "K"), by_country = F)
+create_boxplots(raw_silt_data, c("country","Ti"), by_country = T)
+create_boxplots(raw_silt_data, c("country","silt"), by_country = T)
 
 ## PXRF plots
-pxrf_data <- raw_oc_data %>%
+pxrf_data <- raw_silt_data %>%
              select(country, c(K:Pb))
 pxrf_hists <- create_histograms(pxrf_data, c(2:17), "country")
 ggarrange(plotlist = pxrf_hists, ncol = 4, nrow = 4, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pxrf_variables_histograms.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_variables_histograms.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Vis-NIR plots
 ## No continuum removal
-visnir_data <- raw_oc_data %>%
+visnir_data <- raw_silt_data %>%
                select(country, c("350":"2500")) %>%
                filter(country != "Africa") %>% # Africa has no Vis-NIR data
                group_by(country) %>%
@@ -269,11 +251,11 @@ visnir_data <- raw_oc_data %>%
 visnir_plot <- ggplot(visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra")
 visnir_labels(visnir_plot)
-ggsave("figures/OC/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## With continuum removal
-cr_visnir_data <- raw_oc_data %>%
+cr_visnir_data <- raw_silt_data %>%
                   select(country, c("350":"2500")) %>%
                   filter(country != "Africa") %>% # Africa has no Vis-NIR data
                   group_by(country) %>%
@@ -290,11 +272,11 @@ cr_visnir_data <- add_column(cr_visnir_data, country = c("Brazil", "France", "In
 cr_visnir_plot <- ggplot(cr_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                   geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - Continuum Removal")
 visnir_labels(cr_visnir_plot)
-ggsave("figures/OC/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Savitzky-Golay + first derivative
-deriv_visnir_data <- raw_oc_data %>%
+deriv_visnir_data <- raw_silt_data %>%
   select(country, c("350":"2500")) %>%
   filter(country != "Africa") %>% # Africa has no Vis-NIR data
   group_by(country) %>%
@@ -309,43 +291,43 @@ deriv_visnir_data <- add_column(deriv_visnir_data, country = c("Brazil", "France
                      mutate(wavelength = as.numeric(wavelength))
 ggplot(deriv_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - First Derivative")
-ggsave("figures/OC/visnir_deriv_spectra_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_deriv_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Correlations
 ## PXRF correlations
-cor_pxrf <- raw_oc_data %>%
-            select(OC, c(K:Pb)) %>%
+cor_pxrf <- raw_silt_data %>%
+            select(silt, c(K:Pb)) %>%
             drop_na() %>%
             cor()
-cor_pxrf_pvalue <- raw_oc_data %>%
-                   select(OC, c(K:Pb)) %>%
+cor_pxrf_pvalue <- raw_silt_data %>%
+                   select(silt, c(K:Pb)) %>%
                    drop_na() %>%
                    cor.mtest(conf.level = 0.95) # calculates p-value
-png("figures/OC/pxrf_corrplot_all_countries.png", units = "mm", res = 300,
+png("figures/silt/pxrf_corrplot_all_countries.png", units = "mm", res = 300,
     width = 200, height = 200, bg = "white")
 par(family = "Times New Roman")
 corrplot::corrplot(cor_pxrf, method = "color", order = "hclust",
                    p.mat = cor_pxrf_pvalue$p, addrect = 2,
                    tl.col = "black", pch.cex = 1, sig.level = c(0.001, 0.01, 0.05),
-                   insig = "label_sig", title = "PXRF vs. OC", mar = c(0, 0, 1.5, 0))
+                   insig = "label_sig", title = "PXRF vs. silt", mar = c(0, 0, 1.5, 0))
 dev.off()
 
 ## Vis-NIR correlations
 ## All countries
-cor_visnir_plot_allcountries <- create_cor_visnir(raw_oc_data,
-                                                  bands = c(27:242), property = "OC")
+cor_visnir_plot_allcountries <- create_cor_visnir(raw_silt_data,
+                                                  bands = c(27:242), property = "silt")
 
 ## By country
-cor_visnir_bycountry <- raw_oc_data %>%
+cor_visnir_bycountry <- raw_silt_data %>%
                         filter(country != "Africa") # Africa has no Vis-NIR data
 cor_visnir_plot_bycountry <- create_cor_visnir(cor_visnir_bycountry, bands = c(27:242),
-                                                property = "OC", group_by = "country")
+                                                property = "silt", group_by = "country")
 
 ## All Vis-NIR correlation plots
 cor_visnir_plot_list <- append(cor_visnir_plot_allcountries, cor_visnir_plot_bycountry)
 ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T, legend = "bottom")
-ggsave("figures/OC/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 200, bg = "white")
 
 # Modeling　########################################################################################
@@ -354,15 +336,15 @@ ggsave("figures/OC/visnir_corrplot_all_countries.png", dpi = 300, units = "mm",
 
 ## Vis-NIR models ##################################################################################
 ## Training and validation data
-visnir_data_allcountries <- raw_oc_data %>%
-                            select(country, OC, "350":"2500") %>%
+visnir_data_allcountries <- raw_silt_data %>%
+                            select(country, silt, "350":"2500") %>%
                             drop_na() %>%
                             # substituting numbers by legal variable names
                             rename_with(~ str_replace(., "^[0-9]+$", paste0("band_",. , "_nm")))
 
 ## Partitioning
 set.seed(100)
-partition_index <- createDataPartition(visnir_data_allcountries$OC, p = 0.8, list = F)
+partition_index <- createDataPartition(visnir_data_allcountries$silt, p = 0.8, list = F)
 visnir_train_data <- visnir_data_allcountries %>%
                      slice(partition_index)
 visnir_valid_data <- visnir_data_allcountries %>%
@@ -373,7 +355,7 @@ visnir_valid_data <- visnir_data_allcountries %>%
 control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
-visnir_pls_model <- train(OC ~ ., data = visnir_train_data[-1], method = "pls",
+visnir_pls_model <- train(silt ~ ., data = visnir_train_data[-1], method = "pls",
                           preProcess = preprocess_pls, trControl = control_pls)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
@@ -383,12 +365,12 @@ visnir_pls_cv <- visnir_pls_model$pred %>%
                  add_column(country = visnir_train_data$country)
 visnir_pls_valid <- predict(visnir_pls_model, newdata = visnir_valid_data) %>%
                     as_tibble() %>%
-                    add_column(obs = visnir_valid_data$OC) %>%
+                    add_column(obs = visnir_valid_data$silt) %>%
                     add_column(country = visnir_valid_data$country) %>%
                     rename(pred = value)
 visnir_pls_plots <- validation_plot(visnir_pls_cv, visnir_pls_valid, "Vis-NIR", "PLS")
 ggarrange(plotlist = visnir_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS coefficients
@@ -402,7 +384,7 @@ pls_coefs <- visnir_pls_model$finalModel$coefficients %>%
 ggplot(pls_coefs, aes(x = bands, y = values, color = comps, linetype = comps)) +
        geom_line() + visnir_layout + ylab("Coefficients") +
        ggtitle("Vis-NIR - PLS Coefficients")
-ggsave("figures/OC/visnir_pls_coefs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_pls_coefs.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## PLS importance
@@ -414,14 +396,14 @@ visnir_pls_importance <- varImp(visnir_pls_model)$importance %>%
                          mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("Vis-NIR - PLS Variable Importance")
-ggsave("figures/OC/visnir_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
 control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
-visnir_rf_model <- train(OC ~ ., data = visnir_train_data[-1], method = "rf",
+visnir_rf_model <- train(silt ~ ., data = visnir_train_data[-1], method = "rf",
                          preProcess = preprocess_rf, trControl = control_rf)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
@@ -431,12 +413,12 @@ visnir_rf_cv <- visnir_rf_model$pred %>%
                 add_column(country = visnir_train_data$country)
 visnir_rf_valid <- predict(visnir_rf_model, newdata = visnir_valid_data) %>%
                    as_tibble() %>%
-                   add_column(obs = visnir_valid_data$OC) %>%
+                   add_column(obs = visnir_valid_data$silt) %>%
                    add_column(country = visnir_valid_data$country) %>%
                    rename(pred = value)
 visnir_rf_plots <- validation_plot(visnir_rf_cv, visnir_rf_valid, "Vis-NIR", "RF")
 ggarrange(plotlist = visnir_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -448,14 +430,14 @@ visnir_rf_importance <- varImp(visnir_rf_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
       ggtitle("Vis-NIR - RF Variable Importance")
-ggsave("figures/OC/visnir_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
 control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
-visnir_cubist_model <- train(OC ~ ., data = visnir_train_data[-1], method = "cubist",
+visnir_cubist_model <- train(silt ~ ., data = visnir_train_data[-1], method = "cubist",
                              preProcess = preprocess_cubist, trControl = control_cubist)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
@@ -465,12 +447,12 @@ visnir_cubist_cv <- visnir_cubist_model$pred %>%
                     add_column(country = visnir_train_data$country)
 visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data) %>%
                        as_tibble() %>%
-                       add_column(obs = visnir_valid_data$OC) %>%
+                       add_column(obs = visnir_valid_data$silt) %>%
                        add_column(country = visnir_valid_data$country) %>%
                        rename(pred = value)
 visnir_cubist_plots <- validation_plot(visnir_cubist_cv, visnir_cubist_valid, "Vis-NIR", "Cubist")
 ggarrange(plotlist = visnir_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -482,7 +464,7 @@ visnir_cubist_importance <- varImp(visnir_cubist_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("Vis-NIR - Cubist Variable Importance")
-ggsave("figures/OC/visnir_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
@@ -510,24 +492,24 @@ model_scores <- tibble(Dataset = character(), Model = character(),
                         R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs))
 
 ## PXRF models #####################################################################################
-pxrf_data_allcountries <- raw_oc_data %>%
-                          select(country, OC, "K":"Pb") %>%
+pxrf_data_allcountries <- raw_silt_data %>%
+                          select(country, silt, "K":"Pb") %>%
                           mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
                           drop_na()
 
 ## Feature selection using RF
 control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
 set.seed(100)
-pxrf_feat_select <- rfe(x = pxrf_data_allcountries[-c(1, 2)], y = pxrf_data_allcountries[["OC"]],
+pxrf_feat_select <- rfe(x = pxrf_data_allcountries[-c(1, 2)], y = pxrf_data_allcountries[["silt"]],
                         sizes = c(1:16), rfeControl = control_rfe)
 predictors(pxrf_feat_select)
 ## Selected variables: "Ca" "Sr" "Zr" "K" "Zn" "Mn" "Ti" "Fe" "Rb" "Cu" "Pb" "V" "Cr" "Ni" "Ba" "As"
 pxrf_data_allcountries <- pxrf_data_allcountries %>%
-                          select(country, OC, predictors(pxrf_feat_select))
+                          select(country, silt, predictors(pxrf_feat_select))
 
 ## Partitioning
 set.seed(100)
-partition_index <- createDataPartition(pxrf_data_allcountries$OC, p = 0.8, list = F)
+partition_index <- createDataPartition(pxrf_data_allcountries$silt, p = 0.8, list = F)
 pxrf_train_data <- pxrf_data_allcountries %>%
                    slice(partition_index)
 pxrf_valid_data <- pxrf_data_allcountries %>%
@@ -537,7 +519,7 @@ pxrf_valid_data <- pxrf_data_allcountries %>%
 control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
-pxrf_pls_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "pls",
+pxrf_pls_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "pls",
                         preProcess = preprocess_pls, trControl = control_pls)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
@@ -547,12 +529,12 @@ pxrf_pls_cv <- pxrf_pls_model$pred %>%
                add_column(country = pxrf_train_data$country)
 pxrf_pls_valid <- predict(pxrf_pls_model, newdata = pxrf_valid_data) %>%
                   as_tibble() %>%
-                  add_column(obs = pxrf_valid_data$OC) %>%
+                  add_column(obs = pxrf_valid_data$silt) %>%
                   add_column(country = pxrf_valid_data$country) %>%
                   rename(pred = value)
 pxrf_pls_plots <- validation_plot(pxrf_pls_cv, pxrf_pls_valid, "PXRF", "PLS")
 ggarrange(plotlist = pxrf_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS importance
@@ -563,14 +545,14 @@ pxrf_pls_importance <- varImp(pxrf_pls_model)$importance %>%
                        mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - PLS Variable Importance")
-ggsave("figures/OC/pxrf_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
 control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
-pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
+pxrf_rf_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "rf",
                        preProcess = preprocess_rf, trControl = control_rf)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
@@ -580,12 +562,12 @@ pxrf_rf_cv <- pxrf_rf_model$pred %>%
               add_column(country = pxrf_train_data$country)
 pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
                  as_tibble() %>%
-                 add_column(obs= pxrf_valid_data$OC) %>%
+                 add_column(obs= pxrf_valid_data$silt) %>%
                  add_column(country = pxrf_valid_data$country) %>%
                  rename(pred = value)
 pxrf_rf_plots <- validation_plot(pxrf_rf_cv, pxrf_rf_valid, "PXRF", "RF")
 ggarrange(plotlist = pxrf_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -596,14 +578,14 @@ pxrf_rf_importance <- varImp(pxrf_rf_model)$importance %>%
                       mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - RF Variable Importance")
-ggsave("figures/OC/pxrf_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
 control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
-pxrf_cubist_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "cubist",
+pxrf_cubist_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "cubist",
                            preProcess = preprocess_cubist, trControl = control_cubist)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
@@ -613,12 +595,12 @@ pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
                     add_column(country = pxrf_train_data$country)
 pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
                        as_tibble() %>%
-                       add_column(obs= pxrf_valid_data$OC) %>%
+                       add_column(obs= pxrf_valid_data$silt) %>%
                        add_column(country = pxrf_valid_data$country) %>%
                        rename(pred = value)
 pxrf_cubist_plots <- validation_plot(pxrf_cubist_cv, pxrf_cubist_valid, "PXRF", "Cubist")
 ggarrange(plotlist = pxrf_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -629,7 +611,7 @@ pxrf_cubist_importance <- varImp(pxrf_cubist_model)$importance %>%
                           mutate(variables = factor(variables,levels = variables))
 ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF - Cubist Variable Importance")
-ggsave("figures/OC/pxrf_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pxrf_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Combining model scores
@@ -654,8 +636,8 @@ model_scores <- model_scores %>%
                         R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs))
 
 ## PXRF + Vis-NIR (pv) models ######################################################################
-pv_data_allcountries <- raw_oc_data %>%
-                        select(country, OC, "K":"Pb", "350":"2500") %>%
+pv_data_allcountries <- raw_silt_data %>%
+                        select(country, silt, "K":"Pb", "350":"2500") %>%
                         # substituting numbers by legal variable names
                         rename_with(~ str_replace(., "^[0-9]+$", paste0("band_",. , "_nm"))) %>%
                         mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
@@ -663,7 +645,7 @@ pv_data_allcountries <- raw_oc_data %>%
 
 ## Partitioning
 set.seed(100)
-partition_index <- createDataPartition(pv_data_allcountries$OC, p = 0.8, list = F)
+partition_index <- createDataPartition(pv_data_allcountries$silt, p = 0.8, list = F)
 pv_train_data <- pv_data_allcountries %>%
                  slice(partition_index)
 pv_valid_data <- pv_data_allcountries %>%
@@ -673,7 +655,7 @@ pv_valid_data <- pv_data_allcountries %>%
 control_pls <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_pls <- c("nzv", "center", "scale")
 set.seed(100)
-pv_pls_model <- train(OC ~ ., data = pv_train_data[-1], method = "pls",
+pv_pls_model <- train(silt ~ ., data = pv_train_data[-1], method = "pls",
                       preProcess = preprocess_pls, trControl = control_pls)
 
 ## PLS results - kfold cross validation (80%) and hold-out validation (20%)
@@ -683,12 +665,12 @@ pv_pls_cv <- pv_pls_model$pred %>%
              add_column(country = pv_train_data$country)
 pv_pls_valid <- predict(pv_pls_model, newdata = pv_valid_data) %>%
                 as_tibble() %>%
-                add_column(obs = pv_valid_data$OC) %>%
+                add_column(obs = pv_valid_data$silt) %>%
                 add_column(country = pv_valid_data$country) %>%
                 rename(pred = value)
 pv_pls_plots <- validation_plot(pv_pls_cv, pv_pls_valid, "PXRF + Vis-NIR", "PLS")
 ggarrange(plotlist = pv_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pv_pls_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_pls_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## PLS importance
@@ -701,14 +683,14 @@ pv_pls_importance <- varImp(pv_pls_model)$importance %>%
                      mutate(variables = factor(variables,levels = variables))
 ggplot(pv_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - PLS Variable Importance")
-ggsave("figures/OC/pv_pls_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## RF
 control_rf <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_rf <- c("nzv", "center", "scale")
 set.seed(100)
-pv_rf_model <- train(OC ~ ., data = pv_train_data[-1], method = "rf",
+pv_rf_model <- train(silt ~ ., data = pv_train_data[-1], method = "rf",
                      preProcess = preprocess_rf, trControl = control_rf)
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
@@ -718,12 +700,12 @@ pv_rf_cv <- pv_rf_model$pred %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
                as_tibble() %>%
-               add_column(obs = pv_valid_data$OC) %>%
+               add_column(obs = pv_valid_data$silt) %>%
                add_column(country = pv_valid_data$country) %>%
                rename(pred = value)
 pv_rf_plots <- validation_plot(pv_rf_cv, pv_rf_valid, "PXRF + Vis-NIR", "RF")
 ggarrange(plotlist = pv_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pv_rf_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_rf_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## RF importance
@@ -736,14 +718,14 @@ pv_rf_importance <- varImp(pv_rf_model)$importance %>%
                     mutate(variables = factor(variables,levels = variables))
 ggplot(pv_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - RF Variable Importance")
-ggsave("figures/OC/pv_rf_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
 control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
 preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
-pv_cubist_model <- train(OC ~ ., data = pv_train_data[-1], method = "cubist",
+pv_cubist_model <- train(silt ~ ., data = pv_train_data[-1], method = "cubist",
                          preProcess = preprocess_cubist, trControl = control_cubist)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
@@ -753,12 +735,12 @@ pv_cubist_cv <- pv_cubist_model$pred %>%
                 add_column(country = pv_train_data$country)
 pv_cubist_valid <- predict(pv_cubist_model, newdata = pv_valid_data) %>%
                    as_tibble() %>%
-                   add_column(obs = pv_valid_data$OC) %>%
+                   add_column(obs = pv_valid_data$silt) %>%
                    add_column(country = pv_valid_data$country) %>%
                    rename(pred = value)
 pv_cubist_plots <- validation_plot(pv_cubist_cv, pv_cubist_valid, "PXRF + Vis-NIR", "Cubist")
 ggarrange(plotlist = pv_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
-ggsave("figures/OC/pv_cubist_pred_obs.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_cubist_pred_obs.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
 ## Cubist importance
@@ -771,7 +753,7 @@ pv_cubist_importance <- varImp(pv_cubist_model)$importance %>%
                         mutate(variables = factor(variables,levels = variables))
 ggplot(pv_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
        ggtitle("PXRF + Vis-NIR - Cubist Variable Importance")
-ggsave("figures/OC/pv_cubist_importance.png", dpi = 300, units = "mm",
+ggsave("figures/silt/pv_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 model_scores <- model_scores %>%
@@ -793,4 +775,4 @@ model_scores <- model_scores %>%
                         R2_cv = caret::R2(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         RMSE_valid = RMSE(pv_cubist_valid$pred, pv_cubist_valid$obs),
                         R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs))
-write_excel_csv(model_scores, "tables/OC/model_scores.csv")
+write_excel_csv(model_scores, "tables/silt/model_scores.csv")
