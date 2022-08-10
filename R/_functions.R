@@ -160,15 +160,14 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
 }
 
 ## Prediction plots
-prediction_plot_layout <- list(xlab("Observed OC (%)"), ylab("Predicted OC (%)"),
-                               geom_point(), geom_abline(slope = 1), theme_bw(),
+prediction_plot_layout <- list(geom_point(), geom_abline(slope = 1), theme_bw(),
                                theme(text = element_text(family = "Times New Roman"),
                                      legend.title = element_blank()))
 
 annotate_valid_scores <- function(data, r2, rmse) {
   ## data must have pred and obs columns for relative positioning
   annotate("text", label = c(r2, rmse), x = min(data$obs),
-           y = c(max(data$pred), max(data$pred) - 0.3),
+           y = c(max(data$pred), max(data$pred) * 0.95),
            vjust = 0, hjust = 0, family = "Times New Roman")
 }
 
@@ -194,7 +193,7 @@ mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
   return(mean(values))
 }
 
-validation_plot <- function(cv_set, valid_set, dataset = "", model = "") {
+validation_plot <- function(cv_set, valid_set, variable = "", dataset = "", model = "") {
   data <- list(cv_set, valid_set)
   plots <- list()
   count <- 1
@@ -209,6 +208,8 @@ validation_plot <- function(cv_set, valid_set, dataset = "", model = "") {
     rmse_text <- paste("RMSE: ", round(rmse, 2))
     r2_text <- paste("R2: ", round(r2, 2))
     plots[[count]] <- ggplot(set, aes(x = obs, y = pred, color = country)) +
+                            xlab(paste("Observed", variable, "(%)")) +
+                            ylab(paste("Predicted", variable, "(%)")) +
                             prediction_plot_layout +
                             annotate_valid_scores(set, r2_text, rmse_text)
     count <- count + 1
