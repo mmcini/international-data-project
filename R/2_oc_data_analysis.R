@@ -20,9 +20,10 @@ visnir_data <- raw_data %>%
 
 ## PXRF
 pxrf_data <- raw_data %>%
-             select(country, OC, "K":"Pb") %>%
+             select(country, OC, "K":"Pb", "350":"2500") %>%
              mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
-             drop_na()
+             drop_na() %>%
+             select(country, OC, "K":"Pb")
 
 ## PXRF + Vis-NIR
 pv_data <- raw_data %>%
@@ -98,7 +99,7 @@ visnir_rf_model <- train(OC ~ ., data = visnir_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_rf_cv <- visnir_rf_model$pred %>%
-                filter(mtry == 109) %>% # best model
+                filter(mtry == 2) %>% # best model
                 arrange(rowIndex) %>%
                 add_column(country = visnir_train_data$country)
 visnir_rf_valid <- predict(visnir_rf_model, newdata = visnir_valid_data) %>%
@@ -131,7 +132,7 @@ visnir_cubist_model <- train(OC ~ ., data = visnir_train_data[-1], method = "cub
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_cubist_cv <- visnir_cubist_model$pred %>%
-                    filter(committees == 10, neighbors == 0) %>% # filtering best model
+                    filter(committees == 20, neighbors == 0) %>% # filtering best model
                     arrange(rowIndex) %>%
                     add_column(country = visnir_train_data$country)
 visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data) %>%
@@ -157,6 +158,41 @@ ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_p
 ggsave("figures/OC/allcountries/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+visnir_xgb_model <- train(OC ~ ., data = visnir_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+visnir_xgb_cv <- visnir_xgb_model$pred %>%
+                 filter(nrounds == 50, max_depth == 3,
+                        eta == 0.3,gamma == 0,colsample_bytree == 0.6,
+                        min_child_weight == 1, subsample == 0.75) %>% # filtering best model
+                 arrange(rowIndex) %>%
+                 add_column(country = visnir_train_data$country)
+visnir_xgb_valid <- predict(visnir_xgb_model, newdata = visnir_valid_data) %>%
+                    as_tibble() %>%
+                    add_column(obs = visnir_valid_data$OC) %>%
+                    add_column(country = visnir_valid_data$country) %>%
+                    rename(pred = value)
+visnir_xgb_plots <- validation_plot(visnir_xgb_cv, visnir_xgb_valid,
+                                    variable = "OC", dataset = "Vis-NIR", model = "XGB")
+ggarrange(plotlist = visnir_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries/visnir_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+visnir_xgb_importance <- varImp(visnir_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(visnir_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("Vis-NIR - XGB Variable Importance")
+ggsave("figures/OC/allcountries/visnir_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 ## Combining model scores
 model_scores <- tibble(Dataset = character(), Model = character(),
                        n_cv = numeric(), n_valid = numeric(),
@@ -179,7 +215,13 @@ model_scores <- tibble(Dataset = character(), Model = character(),
                         RMSE_cv = RMSE(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
                         R2_cv = caret::R2(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
                         RMSE_valid = RMSE(visnir_cubist_valid$pred, visnir_cubist_valid$obs),
-                        R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs))
+                        R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs)) %>%
+                add_row(Dataset = "Vis-NIR", Model = "XGB",
+                        n_cv = nrow(visnir_xgb_cv), n_valid = nrow(visnir_xgb_valid),
+                        RMSE_cv = RMSE(visnir_xgb_cv$pred, visnir_xgb_cv$obs),
+                        R2_cv = caret::R2(visnir_xgb_cv$pred, visnir_xgb_cv$obs),
+                        RMSE_valid = RMSE(visnir_xgb_valid$pred, visnir_xgb_valid$obs),
+                        R2_valid = caret::R2(visnir_xgb_valid$pred, visnir_xgb_valid$obs))
 
 ## PXRF models #####################################################################################
 ## Feature selection using RF
@@ -188,6 +230,7 @@ set.seed(100)
 pxrf_feat_select <- rfe(x = pxrf_data[-c(1, 2)], y = pxrf_data[["OC"]],
                         sizes = c(1:16), rfeControl = control_rfe)
 pxrf_selected_predictors <- predictors(pxrf_feat_select)
+### [1] "Ca" "Sr" "K"  "Cu" "Zr" "Mn" "Fe" "Cr" "Rb" "Ti" "V"  "Zn" "Ni" "Pb"
 
 ## Partitioning
 set.seed(100)
@@ -238,7 +281,7 @@ pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_rf_cv <- pxrf_rf_model$pred %>%
-              filter(mtry == 9) %>% # best model
+              filter(mtry == 2) %>% # best model
               arrange(rowIndex) %>%
               add_column(country = pxrf_train_data$country)
 pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
@@ -272,7 +315,7 @@ pxrf_cubist_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "cubist"
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
-                    filter(committees == 20, neighbors == 9) %>% # filtering best model
+                    filter(committees == 20, neighbors == 0) %>% # filtering best model
                     arrange(rowIndex) %>%
                     add_column(country = pxrf_train_data$country)
 pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
@@ -297,6 +340,41 @@ ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plo
 ggsave("figures/OC/allcountries/pxrf_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+pxrf_xgb_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_xgb_cv <- pxrf_xgb_model$pred %>%
+               filter(nrounds == 50, max_depth == 3,
+                      eta == 0.3,gamma == 0,colsample_bytree == 0.6,
+                      min_child_weight == 1, subsample == 1) %>% # filtering best model
+               arrange(rowIndex) %>%
+               add_column(country = pxrf_train_data$country)
+pxrf_xgb_valid <- predict(pxrf_xgb_model, newdata = pxrf_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pxrf_valid_data$OC) %>%
+                  add_column(country = pxrf_valid_data$country) %>%
+                  rename(pred = value)
+pxrf_xgb_plots <- validation_plot(pxrf_xgb_cv, pxrf_xgb_valid,
+                                    variable = "OC", dataset = "PXRF", model = "XGB")
+ggarrange(plotlist = pxrf_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries/pxrf_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+pxrf_xgb_importance <- varImp(pxrf_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - XGB Variable Importance")
+ggsave("figures/OC/allcountries/pxrf_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 ## Combining model scores
 model_scores <- model_scores %>%
                 add_row(Dataset = "PXRF", Model = "PLS",
@@ -316,7 +394,13 @@ model_scores <- model_scores %>%
                         RMSE_cv = RMSE(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
                         R2_cv = caret::R2(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
                         RMSE_valid = RMSE(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs),
-                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs))
+                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "XGB",
+                        n_cv = nrow(pxrf_xgb_cv), n_valid = nrow(pxrf_xgb_valid),
+                        RMSE_cv = RMSE(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        R2_cv = caret::R2(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        RMSE_valid = RMSE(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs),
+                        R2_valid = caret::R2(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs))
 
 ## PXRF + Vis-NIR (pv) models ######################################################################
 ## Partitioning
@@ -372,7 +456,7 @@ pv_rf_model <- train(OC ~ ., data = pv_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pv_rf_cv <- pv_rf_model$pred %>%
-            filter(mtry == 117) %>% # best model
+            filter(mtry == 116) %>% # best model
             arrange(rowIndex) %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
@@ -406,7 +490,7 @@ pv_cubist_model <- train(OC ~ ., data = pv_train_data[-1], method = "cubist",
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pv_cubist_cv <- pv_cubist_model$pred %>%
-                filter(committees == 10, neighbors == 0) %>% # filtering best model
+                filter(committees == 20, neighbors == 0) %>% # filtering best model
                 arrange(rowIndex) %>%
                 add_column(country = pv_train_data$country)
 pv_cubist_valid <- predict(pv_cubist_model, newdata = pv_valid_data) %>%
@@ -433,6 +517,42 @@ ggplot(pv_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_
 ggsave("figures/OC/allcountries/pv_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+pv_xgb_model <- train(OC ~ ., data = pv_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+pv_xgb_cv <- pv_xgb_model$pred %>%
+               filter(nrounds == 50, max_depth == 2,
+                      eta == 0.3,gamma == 0,colsample_bytree == 0.6,
+                      min_child_weight == 1, subsample == 1) %>% # filtering best model
+               arrange(rowIndex) %>%
+               add_column(country = pv_train_data$country)
+pv_xgb_valid <- predict(pv_xgb_model, newdata = pv_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pv_valid_data$OC) %>%
+                  add_column(country = pv_valid_data$country) %>%
+                  rename(pred = value)
+pv_xgb_plots <- validation_plot(pv_xgb_cv, pv_xgb_valid,
+                                    variable = "OC", dataset = "PXRF + Vis-NIR", model = "XGB")
+ggarrange(plotlist = pv_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries/pv_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+pv_xgb_importance <- varImp(pv_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_replace(variables, "^band_", "")) %>%
+                        mutate(variables = str_replace(variables, "_nm$", "")) %>%
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(pv_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF + Vis-NIR - XGB Variable Importance")
+ggsave("figures/OC/allcountries/pv_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 model_scores <- model_scores %>%
                 add_row(Dataset = "PXRF + Vis-NIR", Model = "PLS",
                         n_cv = nrow(pv_pls_cv), n_valid = nrow(pv_pls_valid),
@@ -451,7 +571,13 @@ model_scores <- model_scores %>%
                         RMSE_cv = RMSE(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         R2_cv = caret::R2(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         RMSE_valid = RMSE(pv_cubist_valid$pred, pv_cubist_valid$obs),
-                        R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs))
+                        R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs)) %>%
+                add_row(Dataset = "PXRF + Vis-NIR", Model = "XGB",
+                        n_cv = nrow(pv_xgb_cv), n_valid = nrow(pv_xgb_valid),
+                        RMSE_cv = RMSE(pv_xgb_cv$pred, pv_xgb_cv$obs),
+                        R2_cv = caret::R2(pv_xgb_cv$pred, pv_xgb_cv$obs),
+                        RMSE_valid = RMSE(pv_xgb_valid$pred, pv_xgb_valid$obs),
+                        R2_valid = caret::R2(pv_xgb_valid$pred, pv_xgb_valid$obs))
 write_excel_csv(model_scores, "tables/OC/allcountries/model_scores.csv")
 
 # US ##############################################################################################
@@ -461,7 +587,7 @@ write_excel_csv(model_scores, "tables/OC/allcountries/model_scores.csv")
 visnir_data_us <- visnir_data %>%
                   filter(country == "US")
 set.seed(100)
-partition_index <- createDataPartition(visnir_data_us$OC, p = 0.8, list = F)
+partition_index <- createDataPartition(visnir_data$OC, p = 0.8, list = F)
 visnir_train_data <- visnir_data_us %>%
                      slice(partition_index)
 visnir_valid_data <- visnir_data_us %>%
@@ -555,7 +681,7 @@ visnir_cubist_model <- train(OC ~ ., data = visnir_train_data[-1], method = "cub
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_cubist_cv <- visnir_cubist_model$pred %>%
-                    filter(committees == 10, neighbors == 0) %>% # filtering best model
+                    filter(committees == 20, neighbors == 0) %>% # filtering best model
                     arrange(rowIndex) %>%
                     add_column(country = visnir_train_data$country)
 visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data) %>%
@@ -581,6 +707,41 @@ ggplot(visnir_cubist_importance, aes(x = variables, y = Overall)) + importance_p
 ggsave("figures/OC/US/visnir_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+visnir_xgb_model <- train(OC ~ ., data = visnir_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+visnir_xgb_cv <- visnir_xgb_model$pred %>%
+                 filter(nrounds == 150, max_depth == 1,
+                        eta == 0.4,gamma == 0,colsample_bytree == 0.8,
+                        min_child_weight == 1, subsample == 0.5) %>% # filtering best model
+                 arrange(rowIndex) %>%
+                 add_column(country = visnir_train_data$country)
+visnir_xgb_valid <- predict(visnir_xgb_model, newdata = visnir_valid_data) %>%
+                    as_tibble() %>%
+                    add_column(obs = visnir_valid_data$OC) %>%
+                    add_column(country = visnir_valid_data$country) %>%
+                    rename(pred = value)
+visnir_xgb_plots <- validation_plot(visnir_xgb_cv, visnir_xgb_valid,
+                                    variable = "OC", dataset = "Vis-NIR", model = "XGB")
+ggarrange(plotlist = visnir_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/US/visnir_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+visnir_xgb_importance <- varImp(visnir_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(visnir_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("Vis-NIR - XGB Variable Importance")
+ggsave("figures/OC/US/visnir_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 ## Combining model scores
 model_scores <- tibble(Dataset = character(), Model = character(),
                        n_cv = numeric(), n_valid = numeric(),
@@ -603,25 +764,33 @@ model_scores <- tibble(Dataset = character(), Model = character(),
                         RMSE_cv = RMSE(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
                         R2_cv = caret::R2(visnir_cubist_cv$pred, visnir_cubist_cv$obs),
                         RMSE_valid = RMSE(visnir_cubist_valid$pred, visnir_cubist_valid$obs),
-                        R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs))
+                        R2_valid = caret::R2(visnir_cubist_valid$pred, visnir_cubist_valid$obs)) %>%
+                add_row(Dataset = "Vis-NIR", Model = "XGB",
+                        n_cv = nrow(visnir_xgb_cv), n_valid = nrow(visnir_xgb_valid),
+                        RMSE_cv = RMSE(visnir_xgb_cv$pred, visnir_xgb_cv$obs),
+                        R2_cv = caret::R2(visnir_xgb_cv$pred, visnir_xgb_cv$obs),
+                        RMSE_valid = RMSE(visnir_xgb_valid$pred, visnir_xgb_valid$obs),
+                        R2_valid = caret::R2(visnir_xgb_valid$pred, visnir_xgb_valid$obs))
 
 ## PXRF models #####################################################################################
+pxrf_data_us <- pxrf_data %>%
+               filter(country == "US")
 ## Feature selection using RF
 control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
 set.seed(100)
-pxrf_feat_select <- rfe(x = pxrf_data[-c(1, 2)], y = pxrf_data[["OC"]],
+pxrf_feat_select <- rfe(x = pxrf_data_us[-c(1, 2)], y = pxrf_data_us[["OC"]],
                         sizes = c(1:16), rfeControl = control_rfe)
 pxrf_selected_predictors <- predictors(pxrf_feat_select)
+### [1] "Cu" "Sr" "Mn" "Pb" "Cr" "Fe" "Rb" "As" "Ca" "Ti" "Zr"
 
 ## Partitioning
-pxrf_data_us <- pxrf_data %>%
-                select(country, OC, all_of(pxrf_selected_predictors)) %>%
-                filter(country == "US")
 set.seed(100)
 partition_index <- createDataPartition(pxrf_data_us$OC, p = 0.8, list = F)
 pxrf_train_data <- pxrf_data_us %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
                    slice(partition_index)
 pxrf_valid_data <- pxrf_data_us %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
                    slice(-partition_index)
 
 ## PLS
@@ -663,7 +832,7 @@ pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_rf_cv <- pxrf_rf_model$pred %>%
-              filter(mtry == 9) %>% # best model with mtry = 9
+              filter(mtry == 2) %>% # best model
               arrange(rowIndex) %>%
               add_column(country = pxrf_train_data$country)
 pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
@@ -689,15 +858,13 @@ ggsave("figures/OC/US/pxrf_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
 ## Cubist
-control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
-preprocess_cubist <- c("nzv", "center", "scale")
 set.seed(100)
 pxrf_cubist_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "cubist",
                            preProcess = preprocess, trControl = control)
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
-                    filter(committees == 20, neighbors == 9) %>% # filtering best model
+                    filter(committees == 20, neighbors == 5) %>% # filtering best model
                     arrange(rowIndex) %>%
                     add_column(country = pxrf_train_data$country)
 pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
@@ -722,6 +889,41 @@ ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plo
 ggsave("figures/OC/US/pxrf_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+pxrf_xgb_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_xgb_cv <- pxrf_xgb_model$pred %>%
+               filter(nrounds == 50, max_depth == 3,
+                      eta == 0.3,gamma == 0,colsample_bytree == 0.6,
+                      min_child_weight == 1, subsample == 1) %>% # filtering best model
+               arrange(rowIndex) %>%
+               add_column(country = pxrf_train_data$country)
+pxrf_xgb_valid <- predict(pxrf_xgb_model, newdata = pxrf_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pxrf_valid_data$OC) %>%
+                  add_column(country = pxrf_valid_data$country) %>%
+                  rename(pred = value)
+pxrf_xgb_plots <- validation_plot(pxrf_xgb_cv, pxrf_xgb_valid,
+                                    variable = "OC", dataset = "PXRF", model = "XGB")
+ggarrange(plotlist = pxrf_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/US/pxrf_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+pxrf_xgb_importance <- varImp(pxrf_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_extract(variables, "\\d+")) %>% # extracting numbers
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - XGB Variable Importance")
+ggsave("figures/OC/US/pxrf_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 ## Combining model scores
 model_scores <- model_scores %>%
                 add_row(Dataset = "PXRF", Model = "PLS",
@@ -741,18 +943,27 @@ model_scores <- model_scores %>%
                         RMSE_cv = RMSE(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
                         R2_cv = caret::R2(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
                         RMSE_valid = RMSE(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs),
-                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs))
+                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "XGB",
+                        n_cv = nrow(pxrf_xgb_cv), n_valid = nrow(pxrf_xgb_valid),
+                        RMSE_cv = RMSE(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        R2_cv = caret::R2(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        RMSE_valid = RMSE(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs),
+                        R2_valid = caret::R2(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs))
 
 ## PXRF + Vis-NIR (pv) models ######################################################################
 ## Partitioning
 pv_data_us <- pv_data %>%
-              select(country, OC, all_of(pxrf_selected_predictors), "350":"2500") %>%
               filter(country == "US")
 set.seed(100)
 partition_index <- createDataPartition(pv_data_us$OC, p = 0.8, list = F)
 pv_train_data <- pv_data_us %>%
+                 select(country, OC, all_of(pxrf_selected_predictors),
+                      "band_350_nm":"band_2500_nm") %>%
                  slice(partition_index)
 pv_valid_data <- pv_data_us %>%
+                 select(country, OC, all_of(pxrf_selected_predictors),
+                      "band_350_nm":"band_2500_nm") %>%
                  slice(-partition_index)
 
 ## PLS
@@ -796,7 +1007,7 @@ pv_rf_model <- train(OC ~ ., data = pv_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pv_rf_cv <- pv_rf_model$pred %>%
-            filter(mtry == 117) %>% # best model with mtry = 117
+            filter(mtry == 114) %>% # best model
             arrange(rowIndex) %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
@@ -857,6 +1068,42 @@ ggplot(pv_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_
 ggsave("figures/OC/US/pv_cubist_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+## XGB
+set.seed(100)
+pv_xgb_model <- train(OC ~ ., data = pv_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+pv_xgb_cv <- pv_xgb_model$pred %>%
+               filter(nrounds == 50, max_depth == 2,
+                      eta == 0.3,gamma == 0,colsample_bytree == 0.8,
+                      min_child_weight == 1, subsample == 0.5) %>% # filtering best model
+               arrange(rowIndex) %>%
+               add_column(country = pv_train_data$country)
+pv_xgb_valid <- predict(pv_xgb_model, newdata = pv_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pv_valid_data$OC) %>%
+                  add_column(country = pv_valid_data$country) %>%
+                  rename(pred = value)
+pv_xgb_plots <- validation_plot(pv_xgb_cv, pv_xgb_valid,
+                                    variable = "OC", dataset = "PXRF + Vis-NIR", model = "XGB")
+ggarrange(plotlist = pv_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/US/pv_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+pv_xgb_importance <- varImp(pv_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = str_replace(variables, "^band_", "")) %>%
+                        mutate(variables = str_replace(variables, "_nm$", "")) %>%
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(pv_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF + Vis-NIR - XGB Variable Importance")
+ggsave("figures/OC/US/pv_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
 model_scores <- model_scores %>%
                 add_row(Dataset = "PXRF + Vis-NIR", Model = "PLS",
                         n_cv = nrow(pv_pls_cv), n_valid = nrow(pv_pls_valid),
@@ -875,5 +1122,11 @@ model_scores <- model_scores %>%
                         RMSE_cv = RMSE(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         R2_cv = caret::R2(pv_cubist_cv$pred, pv_cubist_cv$obs),
                         RMSE_valid = RMSE(pv_cubist_valid$pred, pv_cubist_valid$obs),
-                        R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs))
+                        R2_valid = caret::R2(pv_cubist_valid$pred, pv_cubist_valid$obs)) %>%
+                add_row(Dataset = "PXRF + Vis-NIR", Model = "XGB",
+                        n_cv = nrow(pv_xgb_cv), n_valid = nrow(pv_xgb_valid),
+                        RMSE_cv = RMSE(pv_xgb_cv$pred, pv_xgb_cv$obs),
+                        R2_cv = caret::R2(pv_xgb_cv$pred, pv_xgb_cv$obs),
+                        RMSE_valid = RMSE(pv_xgb_valid$pred, pv_xgb_valid$obs),
+                        R2_valid = caret::R2(pv_xgb_valid$pred, pv_xgb_valid$obs))
 write_excel_csv(model_scores, "tables/OC/US/model_scores.csv")
