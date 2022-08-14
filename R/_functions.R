@@ -9,6 +9,7 @@ library(stringr)
 library(ggpubr)
 library(readxl)
 library(caret)
+library(tune)
 
 # Functions ########################################################################################
 
@@ -160,14 +161,14 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
 }
 
 ## Prediction plots
-prediction_plot_layout <- list(geom_point(), geom_abline(slope = 1), theme_bw(),
+prediction_plot_layout <- list(geom_abline(slope = 1), coord_obs_pred(), theme_bw(),
                                theme(text = element_text(family = "Times New Roman"),
                                      legend.title = element_blank()))
 
-annotate_valid_scores <- function(data, r2, rmse) {
+annotate_valid_scores <- function(data, r2, rmse, y_range) {
   ## data must have pred and obs columns for relative positioning
   annotate("text", label = c(r2, rmse), x = min(data$obs),
-           y = c(max(data$pred), max(data$pred) * 0.95),
+           y = c(y_range, y_range * 0.90),
            vjust = 0, hjust = 0, family = "Times New Roman")
 }
 
@@ -193,8 +194,10 @@ mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
   return(mean(values))
 }
 
-validation_plot <- function(cv_set, valid_set, variable = "", dataset = "", model = "") {
+validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
+                            model = "", group_by = NULL) {
   data <- list(cv_set, valid_set)
+  has_group <- !is.null(group_by)
   plots <- list()
   count <- 1
   for (set in data) {
@@ -207,14 +210,22 @@ validation_plot <- function(cv_set, valid_set, variable = "", dataset = "", mode
     }
     rmse_text <- paste("RMSE: ", round(rmse, 2))
     r2_text <- paste("R2: ", round(r2, 2))
-    plots[[count]] <- ggplot(set, aes(x = obs, y = pred, color = country)) +
+    plots[[count]] <- ggplot(set, aes(x = obs, y = pred)) +
+                             {if (has_group) {geom_point(aes_string(color = group_by))}
+                              else {geom_point(color = "gray")}} +
                             xlab(paste("Observed", variable, "(%)")) +
                             ylab(paste("Predicted", variable, "(%)")) +
-                            prediction_plot_layout +
-                            annotate_valid_scores(set, r2_text, rmse_text)
+                            geom_smooth(aes(color = null), method = "lm",se = F,
+                                        linetype = "dashed", col = "black") +
+                            prediction_plot_layout
+    y_range <- min(layer_scales(plots[[1]])$y$get_limits()) + # max y limit - min y limit
+               (max(layer_scales(plots[[1]])$y$get_limits()) -
+               min(layer_scales(plots[[1]])$y$get_limits())) * 0.9
+    plots[[count]] <- plots[[count]] +
+                      annotate_valid_scores(set, r2_text, rmse_text, y_range)
     count <- count + 1
   }
-  plots[[1]] <- plots[[1]] + ggtitle(paste(dataset, "-", model, "(Cross-Validation, 80%)"))
+  plots[[1]] <- plots[[1]] + ggtitle(paste(dataset, "-", model, "(10-fold Cross-Validation, 80%)"))
   plots[[2]] <- plots[[2]] + ggtitle(paste(dataset, "-", model, "(Hold-out Validation, 20%)"))
   return(plots)
 }
