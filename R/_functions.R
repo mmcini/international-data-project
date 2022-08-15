@@ -165,11 +165,19 @@ prediction_plot_layout <- list(geom_abline(slope = 1), coord_obs_pred(), theme_b
                                theme(text = element_text(family = "Times New Roman"),
                                      legend.title = element_blank()))
 
-annotate_valid_scores <- function(data, r2, rmse, y_range) {
+annotate_valid_scores <- function(data, r2, rmse, y_coord) {
   ## data must have pred and obs columns for relative positioning
   annotate("text", label = c(r2, rmse), x = min(data$obs),
-           y = c(y_range, y_range * 0.90),
+           y = c(y_coord, y_coord * 0.90),
            vjust = 0, hjust = 0, family = "Times New Roman")
+}
+
+annotate_coord <- function(y_limit, x_limit, coord_scale) {
+  # gets the the highest value from x and y ranges to use as annotates y coord
+  y_coord <- min(y_limit) + (max(y_limit) - min(y_limit)) * coord_scale
+  x_coord <- min(x_limit) + (max(x_limit) - min(x_limit)) * coord_scale
+  coords <- c(y_coord, x_coord)
+  return(max(coords))
 }
 
 mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
@@ -194,8 +202,9 @@ mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
   return(mean(values))
 }
 
+
 validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
-                            model = "", group_by = NULL) {
+                            model = "", group_by = NULL, coord_scale = 0.9) {
   data <- list(cv_set, valid_set)
   has_group <- !is.null(group_by)
   plots <- list()
@@ -218,11 +227,11 @@ validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
                             geom_smooth(aes(color = null), method = "lm",se = F,
                                         linetype = "dashed", col = "black") +
                             prediction_plot_layout
-    y_range <- min(layer_scales(plots[[1]])$y$get_limits()) + # max y limit - min y limit
-               (max(layer_scales(plots[[1]])$y$get_limits()) -
-               min(layer_scales(plots[[1]])$y$get_limits())) * 0.9
+    coord <- annotate_coord(layer_scales(plots[[1]])$y$get_limits(),
+                            layer_scales(plots[[1]])$x$get_limits(),
+                            coord_scale)
     plots[[count]] <- plots[[count]] +
-                      annotate_valid_scores(set, r2_text, rmse_text, y_range)
+                      annotate_valid_scores(set, r2_text, rmse_text, coord)
     count <- count + 1
   }
   plots[[1]] <- plots[[1]] + ggtitle(paste(dataset, "-", model, "(10-fold Cross-Validation, 80%)"))
