@@ -2990,3 +2990,198 @@ model_scores <- tibble(Dataset = character(), Model = character(),
                         RMSE_valid = RMSE(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs),
                         R2_valid = caret::R2(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs))
 write_excel_csv(model_scores, "tables/OC/Africa/model_scores.csv")
+
+# PXRF for all countries with Africa data ##########################################################
+
+## PXRF
+pxrf_data <- raw_data %>%
+             select(country, OC, "K":"Pb") %>%
+             mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
+             drop_na() %>%
+             select(country, OC, "K":"Pb")
+
+## PXRF models #####################################################################################
+## Feature selection using RF
+control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
+set.seed(100)
+pxrf_feat_select <- rfe(x = pxrf_data[-c(1, 2)], y = pxrf_data[["OC"]],
+                        sizes = c(1:16), rfeControl = control_rfe)
+pxrf_selected_predictors <- predictors(pxrf_feat_select)
+###  [1] "Ca" "Sr" "Zr" "K"  "Mn" "Zn" "Fe" "Rb" "Ti" "V"  "Pb" "Cu" "Cr" "Ni" "Ba"
+
+## Partitioning
+set.seed(100)
+partition_index <- createDataPartition(pxrf_data$OC, p = 0.8, list = F)
+pxrf_train_data <- pxrf_data %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
+                   slice(partition_index)
+pxrf_valid_data <- pxrf_data %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
+                   slice(-partition_index)
+
+## PLS
+set.seed(100)
+pxrf_pls_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "pls",
+                        preProcess = preprocess, trControl = control)
+
+## PLS results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_pls_cv <- pxrf_pls_model$pred %>%
+               filter(ncomp == 3) %>% # best model with comps = 3
+               arrange(rowIndex) %>%
+               add_column(country = pxrf_train_data$country)
+pxrf_pls_valid <- predict(pxrf_pls_model, newdata = pxrf_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pxrf_valid_data$OC) %>%
+                  add_column(country = pxrf_valid_data$country) %>%
+                  rename(pred = value)
+pxrf_pls_plots <- validation_plot(pxrf_pls_cv, pxrf_pls_valid,
+                                  variable = "OC", dataset = "PXRF",
+                                  model = "PLS", group_by = "country")
+ggarrange(plotlist = pxrf_pls_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries_Africa/pxrf_pls_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## PLS importance
+pxrf_pls_importance <- varImp(pxrf_pls_model)$importance %>%
+                       rownames_to_column("variables") %>%
+                       slice_max(n = 10, order_by = Overall, with_ties = F) %>% # 10 biggest values
+                       arrange(Overall) %>%
+                       mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_pls_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - PLS Variable Importance")
+ggsave("figures/OC/allcountries_Africa/pxrf_pls_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## RF
+set.seed(100)
+pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
+                       preProcess = preprocess, trControl = control)
+
+## RF results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_rf_cv <- pxrf_rf_model$pred %>%
+              filter(mtry == 8) %>% # best model
+              arrange(rowIndex) %>%
+              add_column(country = pxrf_train_data$country)
+pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
+                 as_tibble() %>%
+                 add_column(obs = pxrf_valid_data$OC) %>%
+                 add_column(country = pxrf_valid_data$country) %>%
+                 rename(pred = value)
+pxrf_rf_plots <- validation_plot(pxrf_rf_cv, pxrf_rf_valid,
+                                 variable = "OC", dataset = "PXRF",
+                                 model = "RF", group_by = "country")
+ggarrange(plotlist = pxrf_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries_Africa/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## RF importance
+pxrf_rf_importance <- varImp(pxrf_rf_model)$importance %>%
+                      rownames_to_column("variables") %>%
+                      slice_max(n = 10, order_by = Overall, with_ties = F) %>% # 10 biggest values
+                      arrange(Overall) %>%
+                      mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - RF Variable Importance")
+ggsave("figures/OC/allcountries_Africa/pxrf_rf_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Cubist
+control_cubist <- trainControl(method = "cv", number = 10, savePredictions = T)
+preprocess_cubist <- c("nzv", "center", "scale")
+set.seed(100)
+pxrf_cubist_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "cubist",
+                           preProcess = preprocess, trControl = control)
+
+## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
+                  filter(committees == 20, neighbors == 9) %>% # filtering best model
+                  arrange(rowIndex) %>%
+                  add_column(country = pxrf_train_data$country)
+pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
+                     as_tibble() %>%
+                     add_column(obs = pxrf_valid_data$OC) %>%
+                     add_column(country = pxrf_valid_data$country) %>%
+                     rename(pred = value)
+pxrf_cubist_plots <- validation_plot(pxrf_cubist_cv, pxrf_cubist_valid,
+                                     variable = "OC", dataset = "PXRF",
+                                     model = "Cubist", group_by = "country")
+ggarrange(plotlist = pxrf_cubist_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries_Africa/pxrf_cubist_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## Cubist importance
+pxrf_cubist_importance <- varImp(pxrf_cubist_model)$importance %>%
+                          rownames_to_column("variables") %>%
+                          slice_max(n = 10, order_by = Overall, with_ties = F) %>% # 10 biggest values
+                          arrange(Overall) %>%
+                          mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_cubist_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - Cubist Variable Importance")
+ggsave("figures/OC/allcountries_Africa/pxrf_cubist_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## XGB
+set.seed(100)
+pxrf_xgb_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "xgbTree",
+                             preProcess = preprocess, trControl = control)
+
+## XGB results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_xgb_cv <- pxrf_xgb_model$pred %>%
+               filter(nrounds == 100, max_depth == 2,
+                      eta == 0.3,gamma == 0,colsample_bytree == 0.6,
+                      min_child_weight == 1, subsample == 1) %>% # filtering best model
+               arrange(rowIndex) %>%
+               add_column(country = pxrf_train_data$country)
+pxrf_xgb_valid <- predict(pxrf_xgb_model, newdata = pxrf_valid_data) %>%
+                  as_tibble() %>%
+                  add_column(obs = pxrf_valid_data$OC) %>%
+                  add_column(country = pxrf_valid_data$country) %>%
+                  rename(pred = value)
+pxrf_xgb_plots <- validation_plot(pxrf_xgb_cv, pxrf_xgb_valid,
+                                    variable = "OC", dataset = "PXRF",
+                                  model = "XGB", group_by = "country")
+ggarrange(plotlist = pxrf_xgb_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/allcountries_Africa/pxrf_xgb_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## XGB importance
+pxrf_xgb_importance <- varImp(pxrf_xgb_model)$importance %>%
+                        rownames_to_column("variables") %>%
+                        slice_max(n = 30, order_by = Overall, with_ties = F) %>% # 30 biggest values
+                        arrange(Overall) %>%
+                        mutate(variables = factor(variables,levels = variables))
+ggplot(pxrf_xgb_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - XGB Variable Importance")
+ggsave("figures/OC/allcountries_Africa/pxrf_xgb_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Combining model scores
+model_scores <- tibble(Dataset = character(), Model = character(),
+                       n_cv = numeric(), n_valid = numeric(),
+                       RMSE_cv = numeric(), RMSE_valid = numeric(),
+                       R2_cv = numeric(), R2_valid = numeric()) %>%
+                add_row(Dataset = "PXRF", Model = "PLS",
+                        n_cv = nrow(pxrf_pls_cv), n_valid = nrow(pxrf_pls_valid),
+                        RMSE_cv = RMSE(pxrf_pls_cv$pred, pxrf_pls_cv$obs),
+                        R2_cv = caret::R2(pxrf_pls_cv$pred, pxrf_pls_cv$obs),
+                        RMSE_valid = RMSE(pxrf_pls_valid$pred, pxrf_pls_valid$obs),
+                        R2_valid = caret::R2(pxrf_pls_valid$pred, pxrf_pls_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "RF",
+                        n_cv = nrow(pxrf_rf_cv), n_valid = nrow(pxrf_rf_valid),
+                        RMSE_cv = RMSE(pxrf_rf_cv$pred, pxrf_rf_cv$obs),
+                        R2_cv = caret::R2(pxrf_rf_cv$pred, pxrf_rf_cv$obs),
+                        RMSE_valid = RMSE(pxrf_rf_valid$pred, pxrf_rf_valid$obs),
+                        R2_valid = caret::R2(pxrf_rf_valid$pred, pxrf_rf_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "Cubist",
+                        n_cv = nrow(pxrf_cubist_cv), n_valid = nrow(pxrf_cubist_valid),
+                        RMSE_cv = RMSE(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
+                        R2_cv = caret::R2(pxrf_cubist_cv$pred, pxrf_cubist_cv$obs),
+                        RMSE_valid = RMSE(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs),
+                        R2_valid = caret::R2(pxrf_cubist_valid$pred, pxrf_cubist_valid$obs)) %>%
+                add_row(Dataset = "PXRF", Model = "XGB",
+                        n_cv = nrow(pxrf_xgb_cv), n_valid = nrow(pxrf_xgb_valid),
+                        RMSE_cv = RMSE(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        R2_cv = caret::R2(pxrf_xgb_cv$pred, pxrf_xgb_cv$obs),
+                        RMSE_valid = RMSE(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs),
+                        R2_valid = caret::R2(pxrf_xgb_valid$pred, pxrf_xgb_valid$obs))
+write_excel_csv(model_scores, "tables/OC/allcountries_Africa/model_scores.csv")
