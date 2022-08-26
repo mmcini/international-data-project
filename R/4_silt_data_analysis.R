@@ -1572,7 +1572,7 @@ pv_rf_model <- train(silt ~ ., data = pv_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pv_rf_cv <- pv_rf_model$pred %>%
-            filter(mtry == 114) %>% # best model
+            filter(mtry == 231) %>% # best model
             arrange(rowIndex) %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
@@ -1640,9 +1640,9 @@ pv_xgb_model <- train(silt ~ ., data = pv_train_data[-1], method = "xgbTree",
 
 ## XGB results - kfold cross validation (80%) and hold-out validation (20%)
 pv_xgb_cv <- pv_xgb_model$pred %>%
-             filter(nrounds == 50, max_depth == 2,
+             filter(nrounds == 50, max_depth == 3,
                     eta == 0.3,gamma == 0, colsample_bytree == 0.8,
-                    min_child_weight == 1, subsample == 0.5) %>% # filtering best model
+                    min_child_weight == 1, subsample == 0.75) %>% # filtering best model
              arrange(rowIndex) %>%
              add_column(country = pv_train_data$country)
 pv_xgb_valid <- predict(pv_xgb_model, newdata = pv_valid_data) %>%
@@ -1759,6 +1759,8 @@ ggplot(visnir_pls_importance, aes(x = variables, y = Overall)) + importance_plot
 ggsave("figures/silt/France/visnir_pls_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+source("R/_functions.R")
+
 ## RF
 set.seed(100)
 visnir_rf_model <- train(silt ~ ., data = visnir_train_data[-1], method = "rf",
@@ -1766,7 +1768,7 @@ visnir_rf_model <- train(silt ~ ., data = visnir_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_rf_cv <- visnir_rf_model$pred %>%
-                filter(mtry == 2) %>% # best model
+                filter(mtry == 109) %>% # best model
                 arrange(rowIndex) %>%
                 add_column(country = visnir_train_data$country)
 visnir_rf_valid <- predict(visnir_rf_model, newdata = visnir_valid_data) %>%
@@ -1792,6 +1794,8 @@ ggplot(visnir_rf_importance, aes(x = variables, y = Overall)) + importance_plot_
 ggsave("figures/silt/France/visnir_rf_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
+source("R/_functions.R")
+
 ## Cubist
 set.seed(100)
 visnir_cubist_model <- train(silt ~ ., data = visnir_train_data[-1], method = "cubist",
@@ -1799,7 +1803,7 @@ visnir_cubist_model <- train(silt ~ ., data = visnir_train_data[-1], method = "c
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_cubist_cv <- visnir_cubist_model$pred %>%
-                    filter(committees == 20, neighbors == 0) %>% # filtering best model
+                    filter(committees == 10, neighbors == 0) %>% # filtering best model
                     arrange(rowIndex) %>%
                     add_column(country = visnir_train_data$country)
 visnir_cubist_valid <- predict(visnir_cubist_model, newdata = visnir_valid_data) %>%
@@ -1832,9 +1836,9 @@ visnir_xgb_model <- train(silt ~ ., data = visnir_train_data[-1], method = "xgbT
 
 ## XGB results - kfold cross validation (80%) and hold-out validation (20%)
 visnir_xgb_cv <- visnir_xgb_model$pred %>%
-                 filter(nrounds == 50, max_depth == 3,
-                        eta == 0.4,gamma == 0,colsample_bytree == 0.6,
-                        min_child_weight == 1, subsample == 1) %>% # filtering best model
+                 filter(nrounds == 50, max_depth == 2,
+                        eta == 0.3,gamma == 0,colsample_bytree == 0.8,
+                        min_child_weight == 1, subsample == 0.5) %>% # filtering best model
                  arrange(rowIndex) %>%
                  add_column(country = visnir_train_data$country)
 visnir_xgb_valid <- predict(visnir_xgb_model, newdata = visnir_valid_data) %>%
@@ -1859,6 +1863,9 @@ ggplot(visnir_xgb_importance, aes(x = variables, y = Overall)) + importance_plot
        ggtitle("Vis-NIR - XGB Variable Importance")
 ggsave("figures/silt/France/visnir_xgb_importance.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
+
+RMSE(visnir_pls_cv$pred, visnir_pls_cv$obs)
+mean_from_folds(visnir_pls_cv)
 
 ## Combining model scores
 model_scores <- tibble(Dataset = character(), Model = character(),
@@ -1890,6 +1897,8 @@ model_scores <- tibble(Dataset = character(), Model = character(),
                         RMSE_valid = RMSE(visnir_xgb_valid$pred, visnir_xgb_valid$obs),
                         R2_valid = caret::R2(visnir_xgb_valid$pred, visnir_xgb_valid$obs))
 
+source("R/_functions.R")
+
 ## PXRF models #####################################################################################
 pxrf_data_fr <- pxrf_data %>%
                filter(country == "France")
@@ -1899,7 +1908,7 @@ set.seed(100)
 pxrf_feat_select <- rfe(x = pxrf_data_fr[-c(1, 2)], y = pxrf_data_fr[["silt"]],
                         sizes = c(1:16), rfeControl = control_rfe)
 pxrf_selected_predictors <- predictors(pxrf_feat_select)
-### [1] "Sr" "Ca" "Zr" "Mn" "K"  "Ti" "Fe" "As" "Zn" "Cu" "Rb" "Ni" "Pb" "V"  "Ba"
+### [1] "Zr" "Ti" "Sr" "Mn" "Fe" "Cr"
 
 ## Partitioning
 set.seed(100)
@@ -1950,7 +1959,7 @@ pxrf_rf_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_rf_cv <- pxrf_rf_model$pred %>%
-              filter(mtry == 8) %>% # best model
+              filter(mtry == 2) %>% # best model
               arrange(rowIndex) %>%
               add_column(country = pxrf_train_data$country)
 pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
@@ -1982,7 +1991,7 @@ pxrf_cubist_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "cubis
 
 ## Cubist results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_cubist_cv <- pxrf_cubist_model$pred %>%
-                  filter(committees == 20, neighbors == 9) %>% # filtering best mode1
+                  filter(committees == 20, neighbors == 0) %>% # filtering best mode1
                   arrange(rowIndex) %>%
                   add_column(country = pxrf_train_data$country)
 pxrf_cubist_valid <- predict(pxrf_cubist_model, newdata = pxrf_valid_data) %>%
@@ -2014,9 +2023,9 @@ pxrf_xgb_model <- train(silt ~ ., data = pxrf_train_data[-1], method = "xgbTree"
 
 ## XGB results - kfold cross validation (80%) and hold-out validation (20%)
 pxrf_xgb_cv <- pxrf_xgb_model$pred %>%
-               filter(nrounds == 50, max_depth == 2,
+               filter(nrounds == 50, max_depth == 1,
                       eta == 0.3,gamma == 0,colsample_bytree == 0.6,
-                      min_child_weight == 1, subsample == 0.75) %>% # filtering best model
+                      min_child_weight == 1, subsample == 1) %>% # filtering best model
                arrange(rowIndex) %>%
                add_column(country = pxrf_train_data$country)
 pxrf_xgb_valid <- predict(pxrf_xgb_model, newdata = pxrf_valid_data) %>%
@@ -2124,7 +2133,7 @@ pv_rf_model <- train(silt ~ ., data = pv_train_data[-1], method = "rf",
 
 ## RF results - kfold cross validation (80%) and hold-out validation (20%)
 pv_rf_cv <- pv_rf_model$pred %>%
-            filter(mtry == 231) %>% # best model
+            filter(mtry == 112) %>% # best model
             arrange(rowIndex) %>%
             add_column(country = pv_train_data$country)
 pv_rf_valid <- predict(pv_rf_model, newdata = pv_valid_data) %>%
@@ -2192,9 +2201,9 @@ pv_xgb_model <- train(silt ~ ., data = pv_train_data[-1], method = "xgbTree",
 
 ## XGB results - kfold cross validation (80%) and hold-out validation (20%)
 pv_xgb_cv <- pv_xgb_model$pred %>%
-             filter(nrounds == 50, max_depth == 3,
-                    eta == 0.3,gamma == 0,colsample_bytree == 0.8,
-                    min_child_weight == 1, subsample == 0.75) %>% # filtering best model
+             filter(nrounds == 50, max_depth == 1,
+                    eta == 0.4,gamma == 0,colsample_bytree == 0.6,
+                    min_child_weight == 1, subsample == 1) %>% # filtering best model
              arrange(rowIndex) %>%
              add_column(country = pv_train_data$country)
 pv_xgb_valid <- predict(pv_xgb_model, newdata = pv_valid_data) %>%
