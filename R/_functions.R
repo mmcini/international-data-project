@@ -160,11 +160,6 @@ create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_
   return(plots)
 }
 
-## Prediction plots
-prediction_plot_layout <- list(geom_abline(slope = 1), coord_obs_pred(), theme_bw(),
-                               theme(text = element_text(family = "Times New Roman"),
-                                     legend.title = element_blank()))
-
 annotate_valid_scores <- function(data, r2, rmse, y_coord) {
   ## data must have pred and obs columns for relative positioning
   annotate("text", label = c(r2, rmse), x = min(data$obs),
@@ -202,9 +197,18 @@ mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
   return(mean(values))
 }
 
+### Country colors
+country_colors <- brewer.pal(5, "Set1")
+names(country_colors) <- c("Africa", "Brazil", "France", "India", "US")
 
 validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
                             model = "", group_by = NULL, coord_scale = 0.9) {
+
+  prediction_plot_layout <- list(geom_abline(slope = 1), coord_obs_pred(), theme_bw(),
+                               theme(text = element_text(family = "Times New Roman"),
+                                     legend.title = element_blank()))
+
+  if (!is.null(dev.list())) {dev.off()} # refreshes device if not null
   data <- list(cv_set, valid_set)
   has_group <- !is.null(group_by)
   plots <- list()
@@ -219,8 +223,13 @@ validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
     }
     rmse_text <- paste("RMSE: ", round(rmse, 2))
     r2_text <- paste("R2: ", round(r2, 2))
+    if (has_group) { # adds colors to points if grouped
+      set$country <- droplevels(set$country)
+      colors <- scale_color_manual(drop = T, limits = levels(set$country), values = country_colors)
+      colored_points <- list(geom_point(aes_string(color = group_by)), colors)
+      }
     plots[[count]] <- ggplot(set, aes(x = obs, y = pred)) +
-                             {if (has_group) {geom_point(aes_string(color = group_by))}
+                             {if (has_group) {colored_points}
                               else {geom_point(color = "gray")}} +
                             xlab(paste("Observed", variable, "(%)")) +
                             ylab(paste("Predicted", variable, "(%)")) +
