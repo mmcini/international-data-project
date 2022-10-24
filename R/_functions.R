@@ -1,15 +1,24 @@
 # Libs #############################################################################################
 
+library(rnaturalearthdata)
+library(rnaturalearth)
 library(RColorBrewer)
 library(tidyverse)
 library(prospectr)
+library(ggspatial)
 library(extrafont)
 library(corrplot)
 library(stringr)
+library(ggrepel)
 library(ggpubr)
 library(readxl)
+library(raster)
 library(caret)
 library(tune)
+library(sp)
+library(sf)
+
+sf_use_s2(FALSE) # turns off s2 processing, doesnt check geometry
 
 # Functions ########################################################################################
 
