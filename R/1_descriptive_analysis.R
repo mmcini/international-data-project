@@ -178,3 +178,48 @@ cor_visnir_plot_list <- append(cor_visnir_plot_allcountries, cor_visnir_plot_byc
 ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T, legend = "bottom")
 ggsave("figures/stats/visnir_corrplot_clay_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 200, bg = "white")
+
+# Important pXRF variables
+## shows the number of times each variable appears as most important for each dataset
+OC_imp_vars <- read_csv("tables/OC/best_pxrf_vars.csv")$Variables %>%
+               extract_pxrf_vars() %>%
+               table(dnn = c("pxrf_variables")) %>%
+               as_tibble() %>%
+               add_column(target_variable = "OC") %>%
+               arrange(desc(n)) %>%
+               slice_head(n = 10)
+clay_imp_vars <- read_csv("tables/clay/best_pxrf_vars.csv")$Variables %>%
+                 extract_pxrf_vars() %>%
+                 table(dnn = c("pxrf_variables")) %>%
+                 as_tibble() %>%
+                 add_column(target_variable = "Clay") %>%
+                 arrange(desc(n)) %>%
+                 slice_head(n = 10)
+silt_imp_vars <- read_csv("tables/silt/best_pxrf_vars.csv")$Variables %>%
+                 extract_pxrf_vars() %>%
+                 table(dnn = c("pxrf_variables")) %>%
+                 as_tibble() %>%
+                 add_column(target_variable = "Silt") %>%
+                 arrange(desc(n)) %>%
+                 slice_head(n = 10)
+sand_imp_vars <- read_csv("tables/sand/best_pxrf_vars.csv")$Variables %>%
+                 extract_pxrf_vars() %>%
+                 table(dnn = c("pxrf_variables")) %>%
+                 as_tibble() %>%
+                 add_column(target_variable = "Sand") %>%
+                 arrange(desc(n)) %>%
+                 slice_head(n = 10)
+
+imp_table <- rbind(OC_imp_vars, clay_imp_vars, silt_imp_vars, sand_imp_vars)
+
+ggplot(data = imp_table) +
+       geom_bar(stat = "identity", width = 0.5, fill = "steelblue",
+                aes(x = reorder_within(pxrf_variables, -n, target_variable), y = n)) + xlab("") +
+       facet_wrap(.~target_variable, scales = "free_x") +
+       scale_x_reordered() +
+       theme_bw() +
+       theme(text = element_text(family = "Times New Roman"),
+             panel.grid = element_blank())
+
+ggsave("figures/stats/var_importance_count.png", dpi = 300, units = "mm",
+       width = 110, height = 110, bg = "white")

@@ -8,6 +8,7 @@ library(prospectr)
 library(ggspatial)
 library(extrafont)
 library(corrplot)
+library(tidytext)
 library(stringr)
 library(geodata)
 library(ggrepel)
@@ -27,6 +28,17 @@ sf_use_s2(FALSE) # turns off s2 processing, doesnt check geometry
 ## Calculates CV
 cv <- function(x, na.rm) {
   return(sd(x, na.rm = na.rm) / mean(x, na.rm = na.rm))
+}
+
+## Extracts all variables in the importance table so they can be counted
+extract_pxrf_vars <- function(variables) {
+  all_elements <- c()
+  for (i in seq_len(length(variables))) {
+    ## tokenizes the strings in the variables column and appends to a single vector
+    tokens <- unlist(strsplit(str_remove_all(variables[i], ","), "\\s+"))
+    all_elements <- c(all_elements, tokens)
+  }
+  return(all_elements)
 }
 
 ## Normalizes data based in min-max

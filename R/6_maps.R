@@ -11,6 +11,7 @@ studied_countries <- world_map %>%
                                          "France", "Mozambique"))
 studied_countries <- cbind(studied_countries, st_coordinates(st_centroid(studied_countries)))
 
+### Warning: 10 Gb download!
 clim_vars <- worldclim_global(var =  "bio", res = 0.5, path = "data/raster/bio/")
 precip <- clim_vars$wc2.1_30s_bio_12
 temp <- clim_vars$wc2.1_30s_bio_1
@@ -52,10 +53,10 @@ clim_data_summary <- points %>%
                      pivot_longer(cols = clay:temperature,
                                   names_to = "variables",
                                   values_to = "values") %>%
-                     mutate(variables = factor(variables, levels = c("clay", "silt", "sand",
-                                                                     "OC", "temperature",
-                                                                     "precipitation"),
-                                               ordered = T))
+                     mutate(variables = factor(variables, ordered = T,
+                                               levels = c("clay", "silt", "sand",
+                                                          "OC", "temperature",
+                                                          "precipitation")))
 
 color_palette <- c("#DC493A", "#467599", "#F5F749", "#000000", "#C14953", "#1D3354")
 ggplot(data = clim_data_summary) +
