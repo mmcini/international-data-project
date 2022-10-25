@@ -29,6 +29,9 @@ cv <- function(x, na.rm) {
   return(sd(x, na.rm = na.rm) / mean(x, na.rm = na.rm))
 }
 
+## Normalizes data based in min-max
+range_preprocess <- function(x, ...){(x - min(x, ...)) / (max(x, ...) - min(x, ...))}
+
 ## Automatic descriptive stats
 descriptive_stats <- function(data, group_by = NULL) {
 functions <- c(max, min, mean, median, sd, cv, IQR)
