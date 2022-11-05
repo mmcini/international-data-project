@@ -15,10 +15,15 @@ studied_countries <- cbind(studied_countries, st_coordinates(st_centroid(studied
 clim_vars <- worldclim_global(var =  "bio", res = 0.5, path = "data/raster/bio/")
 precip <- clim_vars$wc2.1_30s_bio_12
 temp <- clim_vars$wc2.1_30s_bio_1
-points <- cbind(points, extract(precip, vect(points))) %>%
+points <- cbind(points, raster::extract(precip, vect(points))) %>%
           rename(precipitation = wc2.1_30s_bio_12)
-points <- cbind(points, extract(temp, vect(points))) %>%
+points <- cbind(points, raster::extract(temp, vect(points))) %>%
           rename(temperature = wc2.1_30s_bio_1)
+
+clim_stats_bycountries <- points %>%
+                          as.data.frame() %>%
+                          select("country", "precipitation", "temperature") %>%
+                          descriptive_stats(group_by = "country")
 
 # Maps #############################################################################################
 ## Samples
