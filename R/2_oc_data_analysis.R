@@ -998,6 +998,83 @@ model_scores <- model_scores %>%
                         R2_valid = caret::R2(pv_rf_valid$pred, pv_rf_valid$obs))
 write_excel_csv(model_scores, "tables/OC/India/model_scores.csv")
 
+# Africa ###########################################################################################
+## PXRF models #####################################################################################
+pxrf_data_af <- raw_data %>%
+                select(country, OC, "K":"Pb") %>%
+                mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
+                drop_na() %>%
+                select(country, OC, "K":"Pb") %>%
+                filter(country == "Africa")
+
+## Feature selection using RF
+control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
+set.seed(100)
+pxrf_feat_select <- rfe(x = pxrf_data_af[-c(1, 2)], y = pxrf_data_af[["OC"]],
+                        sizes = c(1:16), rfeControl = control_rfe)
+pxrf_selected_predictors <- predictors(pxrf_feat_select)
+oc_af_pxrf_vars <- pxrf_selected_predictors
+
+## Partitioning
+set.seed(100)
+partition_index <- createDataPartition(pxrf_data_af$OC, p = 0.8, list = F)
+pxrf_train_data <- pxrf_data_af %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
+                   slice(partition_index)
+pxrf_valid_data <- pxrf_data_af %>%
+                   select(country, OC, all_of(pxrf_selected_predictors)) %>%
+                   slice(-partition_index)
+mtry_param <- round((ncol(pxrf_train_data) - 2) / 3) # var number / 3
+grid <- expand.grid(mtry = mtry_param)
+
+## RF
+set.seed(100)
+pxrf_rf_model <- train(OC ~ ., data = pxrf_train_data[-1], method = "rf",
+                       preProcess = preprocess, trControl = control, tuneGrid = grid)
+
+## RF results - kfold cross validation (80%) and hold-out validation (20%)
+pxrf_rf_cv <- pxrf_rf_model$pred %>%
+              filter(mtry == mtry_param) %>% # best model
+              arrange(rowIndex) %>%
+              add_column(country = pxrf_train_data$country)
+pxrf_rf_valid <- predict(pxrf_rf_model, newdata = pxrf_valid_data) %>%
+                 as_tibble() %>%
+                 add_column(obs = pxrf_valid_data$OC) %>%
+                 add_column(country = pxrf_valid_data$country) %>%
+                 rename(pred = value)
+write_excel_csv(pxrf_rf_valid, "tables/OC/Africa/pxrf_rf_valid.csv")
+write_excel_csv(pxrf_rf_cv, "tables/OC/Africa/pxrf_rf_cv.csv")
+pxrf_rf_plots <- validation_plot(pxrf_rf_cv, pxrf_rf_valid,
+                                 variable = "OC", dataset = "PXRF", model = "RF")
+ggarrange(plotlist = pxrf_rf_plots, ncol = 2, common.legend = T, legend = "bottom")
+ggsave("figures/OC/Africa/pxrf_rf_pred_obs.png", dpi = 300, units = "mm",
+       width = 250, height = 150, bg = "white")
+
+## RF importance
+pxrf_rf_importance <- varImp(pxrf_rf_model)$importance %>%
+                      rownames_to_column("variables") %>%
+                      slice_max(n = 10, order_by = Overall, with_ties = F) %>% # 10 biggest values
+                      arrange(Overall) %>%
+                      mutate(variables = factor(variables,levels = variables))
+write_excel_csv(pxrf_rf_importance, "tables/OC/Africa/pxrf_rf_importance.csv")
+ggplot(pxrf_rf_importance, aes(x = variables, y = Overall)) + importance_plot_layout +
+       ggtitle("PXRF - RF Variable Importance")
+ggsave("figures/OC/Africa/pxrf_rf_importance.png", dpi = 300, units = "mm",
+       width = 200, height = 150, bg = "white")
+
+## Combining model scores
+model_scores <- tibble(Dataset = character(), Model = character(),
+                       n_cv = numeric(), n_valid = numeric(),
+                       RMSE_cv = numeric(), RMSE_valid = numeric(),
+                       R2_cv = numeric(), R2_valid = numeric()) %>%
+                add_row(Dataset = "PXRF", Model = "RF",
+                        n_cv = nrow(pxrf_rf_cv), n_valid = nrow(pxrf_rf_valid),
+                        RMSE_cv = mean_from_folds(pxrf_rf_cv, type = "RMSE"),
+                        R2_cv = mean_from_folds(pxrf_rf_cv, type = "R2"),
+                        RMSE_valid = RMSE(pxrf_rf_valid$pred, pxrf_rf_valid$obs),
+                        R2_valid = caret::R2(pxrf_rf_valid$pred, pxrf_rf_valid$obs))
+write_excel_csv(model_scores, "tables/OC/Africa/model_scores.csv")
+
 # PXRF for all countries with Africa data ##########################################################
 pxrf_data <- raw_data %>%
              select(country, OC, "K":"Pb") %>%
