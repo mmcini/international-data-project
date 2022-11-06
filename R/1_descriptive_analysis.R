@@ -34,6 +34,12 @@ create_boxplots(raw_data, variable_names, by_country = F)
 ggsave("figures/stats/pxrf_boxplots_allcountries.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 variable_names <- raw_data %>%
+                  select(country, c("clay":"silt"), OC) %>%
+                  colnames()
+create_boxplots(raw_data, variable_names, by_country = T)
+ggsave("figures/stats/target_vars_boxplots_bycountries.png", dpi = 300, units = "mm",
+       width = 150, height = 150, bg = "white")
+variable_names <- raw_data %>%
                   select(country, c("K":"Pb")) %>%
                   colnames()
 create_boxplots(raw_data, variable_names, by_country = T)
@@ -58,10 +64,8 @@ visnir_data <- raw_data %>%
                pivot_longer(c("350":"2500"), names_to = "wavelength", values_to = "reflectance") %>%
                mutate(wavelength = as.numeric(wavelength))
 visnir_plot <- ggplot(visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
-               geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra")
-visnir_labels(visnir_plot)
-ggsave("figures/stats/visnir_spectra_all_countries.png", dpi = 300, units = "mm",
-       width = 200, height = 100, bg = "white")
+               geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra") + xlab("")
+visnir_plot <- visnir_labels(visnir_plot)
 
 ## With continuum removal
 cr_visnir_data <- raw_data %>%
@@ -80,9 +84,10 @@ cr_visnir_data <- add_column(cr_visnir_data, country = c("Brazil", "France", "In
                              mutate(wavelength = as.numeric(wavelength))
 cr_visnir_plot <- ggplot(cr_visnir_data, aes(x = wavelength, y = reflectance, color = country)) +
                   geom_line() + visnir_layout + ggtitle("Vis-NIR Spectra - Continuum Removal")
-visnir_labels(cr_visnir_plot)
+cr_visnir_plot <- visnir_labels(cr_visnir_plot)
+ggarrange(visnir_plot, cr_visnir_plot, nrow = 2, common.legend = T, legend = "bottom")
 ggsave("figures/stats/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
-       width = 200, height = 100, bg = "white")
+       width = 200, height = 150, bg = "white")
 
 ## Savitzky-Golay + first derivative
 deriv_visnir_data <- raw_data %>%
@@ -179,6 +184,48 @@ ggarrange(plotlist = cor_visnir_plot_list,ncol = 1, nrow = 5, common.legend = T,
 ggsave("figures/stats/visnir_corrplot_clay_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 200, bg = "white")
 
+# All variables using all data
+cor_visnir_allvariables <- raw_data %>%
+                           select("country", "OC", "sand", "silt", "clay", c("350":"2500")) %>%
+                           filter(country != "Africa") %>% # Africa has no Vis-NIR data
+                           drop_na()
+
+properties <- c("OC", "sand", "silt", "clay")
+cor_visnir_plot_list_allvariables <- list()
+for (property in properties) {
+  plot <- create_cor_visnir(cor_visnir_allvariables, bands = c(6:221), property = property)
+  plot <- plot[[1]] + ylab(str_to_title(property)) + ggtitle("")
+  cor_visnir_plot_list_allvariables[[property]] <- plot
+}
+cor_visnir_plot_list_allvariables[["OC"]] <- cor_visnir_plot_list_allvariables[["OC"]] +
+                                             ylab("OC") + ggtitle("Vis-NIR correlations") +
+                                             theme(axis.text.x = element_blank(),
+                                                   axis.ticks.x = element_blank(),
+                                                   axis.title.x = element_blank(),
+                                                   plot.margin = margin(r = 5,
+                                                                        unit = "mm"))
+cor_visnir_plot_list_allvariables[["sand"]] <- cor_visnir_plot_list_allvariables[["sand"]] +
+                                             theme(axis.text.x = element_blank(),
+                                                   axis.ticks.x = element_blank(),
+                                                   axis.title.x = element_blank(),
+                                                   plot.margin = margin(r = 5,
+                                                                        unit = "mm"))
+cor_visnir_plot_list_allvariables[["silt"]] <- cor_visnir_plot_list_allvariables[["silt"]] +
+                                             theme(axis.text.x = element_blank(),
+                                                   axis.ticks.x = element_blank(),
+                                                   axis.title.x = element_blank(),
+                                                   plot.margin = margin(r = 5,
+                                                                        unit = "mm"))
+cor_visnir_plot_list_allvariables[["clay"]] <- cor_visnir_plot_list_allvariables[["clay"]] +
+                                               xlab("Wavelength (nm)") +
+                                               theme(plot.margin = margin(r = 5, b = 2,
+                                                                          unit = "mm"))
+ggarrange(plotlist = cor_visnir_plot_list_allvariables,ncol = 1,
+          nrow = 4, common.legend = T, legend = "bottom")
+
+ggsave("figures/stats/visnir_corrplot_clay_all_variables.png", dpi = 300, units = "mm",
+       width = 130, height = 130, bg = "white")
+
 # Important pXRF variables
 ## shows the number of times each variable appears as most important for each dataset
 OC_imp_vars <- read_csv("tables/OC/best_pxrf_vars.csv")$Variables %>%
@@ -214,7 +261,8 @@ imp_table <- rbind(OC_imp_vars, clay_imp_vars, silt_imp_vars, sand_imp_vars)
 
 ggplot(data = imp_table) +
        geom_bar(stat = "identity", width = 0.5, fill = "steelblue",
-                aes(x = reorder_within(pxrf_variables, -n, target_variable), y = n)) + xlab("") +
+                aes(x = reorder_within(pxrf_variables, -n, target_variable), y = n)) +
+       xlab("") + ylab("Number of occurrences") +
        facet_wrap(.~target_variable, scales = "free_x") +
        scale_x_reordered() +
        theme_bw() +
