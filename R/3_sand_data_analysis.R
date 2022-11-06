@@ -221,7 +221,7 @@ model_scores <- model_scores %>%
    add_row(Dataset = "PXRF + Vis-NIR", Model = "RF",
            n_cv = nrow(pv_rf_cv), n_valid = nrow(pv_rf_valid),
            RMSE_cv = mean_from_folds(pv_rf_cv, type = "RMSE"),
-           R2_cv = mean_from_folds(pv_rf_cv, type = "RMSE"),
+           R2_cv = mean_from_folds(pv_rf_cv, type = "R2"),
            RMSE_valid = RMSE(pv_rf_valid$pred, pv_rf_valid$obs),
            R2_valid = caret::R2(pv_rf_valid$pred, pv_rf_valid$obs))
 write_excel_csv(model_scores, "tables/sand/allcountries/model_scores.csv")
