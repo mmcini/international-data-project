@@ -3,7 +3,9 @@
 library(rnaturalearthdata)
 library(rnaturalearth)
 library(RColorBrewer)
+library(conflicted)
 library(tidyverse)
+library(patchwork)
 library(prospectr)
 library(ggspatial)
 library(extrafont)
@@ -21,6 +23,8 @@ library(sp)
 library(sf)
 
 sf_use_s2(FALSE) # turns off s2 processing, doesnt check geometry
+conflict_prefer("select", "dplyr") # avoids select from raster from masking dplyrs select
+conflict_prefer("filter", "dplyr") # avoids filter from raster from masking dplyrs filter
 
 # Functions ########################################################################################
 
@@ -67,6 +71,11 @@ return(stats)
 
 # Plot layouts #####################################################################################
 ## Lengthy and repetitive plot formatting and functions are defined here
+
+### Country colors
+country_colors <- brewer.pal(5, "Set1")
+names(country_colors) <- c("Mozambique", "Brazil", "France", "India", "US")
+
 ## histograms
 hist_layout <- list(theme_bw(), ylab("Count"),
                     theme(text = element_text(family = "Times New Roman"),
@@ -93,14 +102,22 @@ boxplot_layout <- list(theme_bw(),
                        theme(text = element_text(family = "Times New Roman"),
                              legend.title = element_blank()),
                        xlab(""), ylab(""))
-create_boxplots <- function(data, variables, by_country = T) {
+create_boxplots <- function(data, variables, by_country = T,
+                            ncol = NULL, nrow = NULL, ordered = F, levels = NULL) {
   if (by_country) {
     boxplot_data <- data %>%
                     select(all_of(variables)) %>%
                     pivot_longer(-c(country), names_to = "variables", values_to = "values")
+    if (ordered) {
+      boxplot_data <- boxplot_data %>%
+                      mutate(variables = factor(variables,
+                                                levels = levels,
+                                                ordered = T))
+    }
     plot <- ggplot(boxplot_data, aes(y = variables, x = values, fill = country)) +
             geom_boxplot() +
-            facet_wrap( ~ variables, scales = "free") +
+            scale_fill_manual(values = country_colors) +
+            facet_wrap( ~ variables, scales = "free", ncol = ncol, nrow = nrow) +
             boxplot_layout
   } else {
     boxplot_data <- data %>%
@@ -117,12 +134,14 @@ create_boxplots <- function(data, variables, by_country = T) {
 ## Vis-NIR
 visnir_layout <- list(theme_bw(), ylab("Reflectance factor"), xlab("Wavelength (nm)"),
                       scale_x_continuous(breaks = seq(0, 2500, 250)),
+                      scale_color_manual(limits = c("Brazil", "France", "India", "US"),
+                                         values = country_colors),
                       theme(text = element_text(family = "Times New Roman"),
                             legend.title = element_blank()))
 ## Function to add labels to Vis-NIR plots
-features <- c(420, 480, 650, 1415, 1930, 2205, 2265)
-feature_names <- c(as.character(features[1:7]))
-positions <- rep(0, 7)
+features <- c(420, 480, 650, 1415, 1930, 2205)
+feature_names <- c(as.character(features[1:6]))
+positions <- rep(0, 6)
 visnir_labels <- function(plot) {
   for (i in seq_len(length(features))) {
     plot <- plot +
@@ -222,10 +241,6 @@ mean_from_folds <- function(data, type = "RMSE", folds_column = "Resample") {
   return(mean(values))
 }
 
-### Country colors
-country_colors <- brewer.pal(5, "Set1")
-names(country_colors) <- c("Africa", "Brazil", "France", "India", "US")
-
 validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
                             model = "", group_by = NULL, coord_scale = 0.9) {
 
@@ -268,8 +283,8 @@ validation_plot <- function(cv_set, valid_set, variable = "", dataset = "",
                       annotate_valid_scores(set, r2_text, rmse_text, coord)
     count <- count + 1
   }
-  plots[[1]] <- plots[[1]] + ggtitle(paste(dataset, "-", model, "(10-fold Cross-Validation, 80%)"))
-  plots[[2]] <- plots[[2]] + ggtitle(paste(dataset, "-", model, "(Hold-out Validation, 20%)"))
+  plots[[1]] <- plots[[1]] + ggtitle(paste(dataset, "-", model, "(80%)"))
+  plots[[2]] <- plots[[2]] + ggtitle(paste(dataset, "-", model, "(20%)"))
   return(plots)
 }
 
