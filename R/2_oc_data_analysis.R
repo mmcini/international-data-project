@@ -1005,7 +1005,7 @@ pxrf_data_af <- raw_data %>%
                 mutate(across(c("K":"Pb"), ~ replace_na(., 0))) %>% # treat NAs as 0
                 drop_na() %>%
                 select(country, OC, "K":"Pb") %>%
-                filter(country == "Africa")
+                filter(country == "Mozambique")
 
 ## Feature selection using RF
 control_rfe <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
@@ -1154,17 +1154,19 @@ write_excel_csv(model_scores, "tables/OC/allcountries_Africa/model_scores.csv")
 
 ## PXRF vars
 best_pxrf_vars <- tibble(Dataset = c("All countries", "Brazil", "US", "France",
-                                     "India", "All countries with Africa"),
+                                     "India", "Africa", "All countries with Africa"),
                          Variables = c(paste(oc_allcountries_pxrf_vars, collapse = ", "),
                                        paste(oc_br_pxrf_vars, collapse = ", "),
                                        paste(oc_us_pxrf_vars, collapse = ", "),
                                        paste(oc_fr_pxrf_vars, collapse = ", "),
                                        paste(oc_in_pxrf_vars, collapse = ", "),
+                                       paste(oc_af_pxrf_vars, collapse = ", "),
                                        paste(oc_allcountriesAfrica_pxrf_vars, collapse = ", ")),
                          n = c(length(oc_allcountries_pxrf_vars),
                                length(oc_br_pxrf_vars),
                                length(oc_us_pxrf_vars),
                                length(oc_fr_pxrf_vars),
                                length(oc_in_pxrf_vars),
+                               length(oc_af_pxrf_vars),
                                length(oc_allcountriesAfrica_pxrf_vars)))
 write_excel_csv(best_pxrf_vars, "tables/OC/best_pxrf_vars.csv")
