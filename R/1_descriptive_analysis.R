@@ -34,15 +34,9 @@ create_boxplots(raw_data, variable_names, by_country = F)
 ggsave("figures/stats/pxrf_boxplots_allcountries.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 variable_names <- raw_data %>%
-                  select(country, c("clay":"silt"), OC) %>%
-                  colnames()
-create_boxplots(raw_data, variable_names, by_country = T)
-ggsave("figures/stats/target_vars_boxplots_bycountries.png", dpi = 300, units = "mm",
-       width = 150, height = 150, bg = "white")
-variable_names <- raw_data %>%
                   select(country, c("K":"Pb")) %>%
                   colnames()
-create_boxplots(raw_data, variable_names, by_country = T)
+create_boxplots(raw_data, variable_names, by_country = T) + theme(panel.grid = element_blank())
 ggsave("figures/stats/pxrf_boxplots_bycountries.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
 
@@ -70,7 +64,7 @@ visnir_plot <- visnir_labels(visnir_plot)
 ## With continuum removal
 cr_visnir_data <- raw_data %>%
                   select(country, c("350":"2500")) %>%
-                  filter(country != "Africa") %>% # Africa has no Vis-NIR data
+                  filter(country != "Mozambique") %>% # Africa has no Vis-NIR data
                   group_by(country) %>%
                   summarise(across(c("350":"2500"), mean, na.rm = T)) %>%
                   select(c("350":"2500")) %>%
@@ -89,7 +83,23 @@ ggarrange(visnir_plot, cr_visnir_plot, nrow = 2, common.legend = T, legend = "bo
 ggsave("figures/stats/visnir_cr_spectra_all_countries.png", dpi = 300, units = "mm",
        width = 200, height = 150, bg = "white")
 
-## Savitzky-Golay + first derivative
+x_axis <- seq(350, 2500, 10)
+cor_matrix <- cor_visnir_allvariables %>%
+              select(-country) %>%
+              cor() %>%
+              as_tibble() %>%
+              select("oc":"clay") %>%
+              slice(5:n()) %>%
+              add_column(x = x_axis) %>%
+              rename(clay = clay, silt = silt, sand = sand) %>%
+              pivot_longer(c("oc":"clay"), names_to = "variables", values_to = "values") %>%
+              mutate(variables = factor(variables, c("clay", "silt", "sand", "oc"), ordered = t))
+
+ggplot(cor_matrix, aes(x = x, y = variables, fill = values)) +
+       geom_tile() + ylab("") + cor_visnir_layout + xlab("wavelength (nm)") +
+       ggtitle("vis-nir - pearson's correlation coefficients")
+
+## savitzky-golay + first derivative
 deriv_visnir_data <- raw_data %>%
   select(country, c("350":"2500")) %>%
   filter(country != "Africa") %>% # Africa has no Vis-NIR data
@@ -225,49 +235,3 @@ ggarrange(plotlist = cor_visnir_plot_list_allvariables,ncol = 1,
 
 ggsave("figures/stats/visnir_corrplot_clay_all_variables.png", dpi = 300, units = "mm",
        width = 130, height = 130, bg = "white")
-
-# Important pXRF variables
-## shows the number of times each variable appears as most important for each dataset
-OC_imp_vars <- read_csv("tables/OC/best_pxrf_vars.csv")$Variables %>%
-               extract_pxrf_vars() %>%
-               table(dnn = c("pxrf_variables")) %>%
-               as_tibble() %>%
-               add_column(target_variable = "OC") %>%
-               arrange(desc(n)) %>%
-               slice_head(n = 10)
-clay_imp_vars <- read_csv("tables/clay/best_pxrf_vars.csv")$Variables %>%
-                 extract_pxrf_vars() %>%
-                 table(dnn = c("pxrf_variables")) %>%
-                 as_tibble() %>%
-                 add_column(target_variable = "Clay") %>%
-                 arrange(desc(n)) %>%
-                 slice_head(n = 10)
-silt_imp_vars <- read_csv("tables/silt/best_pxrf_vars.csv")$Variables %>%
-                 extract_pxrf_vars() %>%
-                 table(dnn = c("pxrf_variables")) %>%
-                 as_tibble() %>%
-                 add_column(target_variable = "Silt") %>%
-                 arrange(desc(n)) %>%
-                 slice_head(n = 10)
-sand_imp_vars <- read_csv("tables/sand/best_pxrf_vars.csv")$Variables %>%
-                 extract_pxrf_vars() %>%
-                 table(dnn = c("pxrf_variables")) %>%
-                 as_tibble() %>%
-                 add_column(target_variable = "Sand") %>%
-                 arrange(desc(n)) %>%
-                 slice_head(n = 10)
-
-imp_table <- rbind(OC_imp_vars, clay_imp_vars, silt_imp_vars, sand_imp_vars)
-
-ggplot(data = imp_table) +
-       geom_bar(stat = "identity", width = 0.5, fill = "steelblue",
-                aes(x = reorder_within(pxrf_variables, -n, target_variable), y = n)) +
-       xlab("") + ylab("Number of occurrences") +
-       facet_wrap(.~target_variable, scales = "free_x") +
-       scale_x_reordered() +
-       theme_bw() +
-       theme(text = element_text(family = "Times New Roman"),
-             panel.grid = element_blank())
-
-ggsave("figures/stats/var_importance_count.png", dpi = 300, units = "mm",
-       width = 110, height = 110, bg = "white")
