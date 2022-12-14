@@ -14,6 +14,7 @@ library(tidytext)
 library(stringr)
 library(geodata)
 library(ggrepel)
+library(ggtern)
 library(ggpubr)
 library(readxl)
 library(raster)
@@ -23,8 +24,14 @@ library(sp)
 library(sf)
 
 sf_use_s2(FALSE) # turns off s2 processing, doesnt check geometry
-conflict_prefer("select", "dplyr") # avoids select from raster from masking dplyrs select
-conflict_prefer("filter", "dplyr") # avoids filter from raster from masking dplyrs filter
+
+## avoids masking conflincs
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("theme_bw", "ggplot2")
+conflict_prefer("ggsave", "ggplot2")
+conflict_prefer("aes", "ggplot2")
+conflict_prefer("annotate", "ggplot2")
 
 # Functions ########################################################################################
 
@@ -116,7 +123,8 @@ create_boxplots <- function(data, variables, by_country = T,
     }
     plot <- ggplot(boxplot_data, aes(y = variables, x = values, fill = country)) +
             geom_boxplot() +
-            scale_fill_manual(values = country_colors) +
+            scale_fill_manual(drop = T, limits = levels(boxplot_data$country),
+                              values = country_colors) +
             facet_wrap( ~ variables, scales = "free", ncol = ncol, nrow = nrow) +
             boxplot_layout
   } else {
@@ -132,22 +140,22 @@ create_boxplots <- function(data, variables, by_country = T,
 }
 
 ## Vis-NIR
-visnir_layout <- list(theme_bw(), ylab("Reflectance factor"), xlab("Wavelength (nm)"),
+visnir_layout <- list(theme_bw(), ylab("Reflectance"), xlab("Wavelength (nm)"),
                       scale_x_continuous(breaks = seq(0, 2500, 250)),
                       scale_color_manual(limits = c("Brazil", "France", "India", "US"),
                                          values = country_colors),
                       theme(text = element_text(family = "Times New Roman"),
                             legend.title = element_blank()))
 ## Function to add labels to Vis-NIR plots
-features <- c(420, 480, 650, 1415, 1930, 2205)
-feature_names <- c(as.character(features[1:6]))
+features_pos <- c(420, 480, 650, 1415, 1930, 2205)
+features_names <- c("Gt", "Gt", "Hm", "2:1/1:1", "2:1/Water", "Kt")
 positions <- rep(0, 6)
 visnir_labels <- function(plot) {
-  for (i in seq_len(length(features))) {
+  for (i in seq_len(length(features_names))) {
     plot <- plot +
-      geom_vline(linetype = 2, xintercept = features[i]) +
-      annotate("text", label = feature_names[i],
-               x = features[i] - 35, y = positions[i], angle = 90,
+      geom_vline(linetype = 2, xintercept = features_pos[i]) +
+      annotate("text", label = features_names[i],
+               x = features_pos[i] - 35, y = positions[i], angle = 90,
                hjust = 0,
                size = 3,
                family = "Times New Roman")
@@ -155,15 +163,26 @@ visnir_labels <- function(plot) {
   return(plot)
 }
 
-cor_visnir_layout <- list(xlab(""),
-                          scale_x_continuous(breaks = seq(350, 2500, 150)),
+visnir_cor_labels <- function(plot) {
+  for (i in seq_len(length(features_names))) {
+    plot <- plot +
+      geom_vline(linetype = 2, xintercept = features_pos[i]) +
+      annotate("text", label = features_names[i],
+               x = features_pos[i] - 35, y = positions[i] + 0.6, angle = 90,
+               hjust = 0,
+               size = 3,
+               family = "Times New Roman")
+  }
+  return(plot)
+}
+
+cor_visnir_layout <- list(xlab(""), ylab(""),
+                          scale_x_continuous(breaks = seq(0, 2500, 250)),
                           scale_fill_distiller(limits = c(-1, 1), type = "div",
                                                palette = "RdBu", aesthetics = "fill"),
                           theme_bw(),
                           theme(text = element_text(family = "Times New Roman"),
-                                plot.title = element_text(hjust = 0.5),
                                 panel.grid = element_blank(),
-                                axis.text.x = element_text(angle = 90),
                                 legend.title = element_blank()))
 
 create_cor_visnir <- function(data = NULL, bands = NULL, property = NULL, group_by = NULL) {
