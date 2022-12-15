@@ -20,6 +20,8 @@ points <- cbind(points, raster::extract(precip, vect(points))) %>%
 points <- cbind(points, raster::extract(temp, vect(points))) %>%
           rename(temperature = wc2.1_30s_bio_1)
 
+st_write(points, "points.shp")
+
 clim_stats_bycountries <- points %>%
                           as.data.frame() %>%
                           select("country", "precipitation", "temperature") %>%
@@ -30,21 +32,24 @@ clim_stats_bycountries <- points %>%
 ggplot() +
        ylab("Latitude") + xlab("Longitude") +
        geom_sf(data = world_map) +
-       geom_sf(data = studied_countries, fill = "steelblue") +
+       geom_sf(data = studied_countries, aes(fill = "")) +
        geom_sf(data = points, aes(size = precipitation, color = temperature)) +
-       geom_label_repel(data = studied_countries, aes(X, Y, label = admin), size = 3, force = 110,
+       geom_label_repel(data = studied_countries, aes(X, Y, label = admin), size = 4, force = 130,
                         family = "Times New Roman") +
        coord_sf(expand = F) +
+       scale_fill_manual(values = "steelblue") +
        scale_size_continuous(range = c(1, 5)) +
        scale_color_distiller(palette = "RdBu") +
        guides(size = guide_legend(title = "Precipitation (mm)", title.position = "top",
                                   title.hjust = 0.5, label.hjust = 0.5),
               color = guide_colorbar(title = "Temperature (°C)", title.position = "top",
-                                     title.hjust = 0.5, label.hjust = 0.5)) +
+                                     title.hjust = 0.5, label.hjust = 0.5),
+              fill = guide_legend(title = "Studied countries", title.position = "top",
+                                     title.hjust = 0.5)) +
        theme_bw() +
-       theme(text = element_text(family = "Times New Roman"),
-            legend.position = "bottom",
-            legend.key.size = unit(4, "mm"))
+       theme(text = element_text(family = "Times New Roman", size = 15),
+            legend.title.align = 0.5,
+            legend.key.size = unit(6, "mm"))
 
 ggsave("figures/maps/samples.png", dpi = 300, units = "mm",
        width = 250, height = 150, bg = "white")
