@@ -18,9 +18,8 @@ temp <- clim_vars$wc2.1_30s_bio_1
 points <- cbind(points, raster::extract(precip, vect(points))) %>%
           rename(precipitation = wc2.1_30s_bio_12)
 points <- cbind(points, raster::extract(temp, vect(points))) %>%
-          rename(temperature = wc2.1_30s_bio_1)
-
-st_write(points, "points.shp")
+          rename(temperature = wc2.1_30s_bio_1) %>%
+          filter(ID != 45)
 
 clim_stats_bycountries <- points %>%
                           as.data.frame() %>%
